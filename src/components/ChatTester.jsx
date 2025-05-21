@@ -54,7 +54,7 @@ const ChatTester = ({ faqs }) => {
 
     try {
       const res = await axios.post(
-        "/api/chat",
+        `${import.meta.env.VITE_API_BASE_URL}/api/chat`, // ✅ dynamic
         {
           question: userQ,
           faqs: faqs,
@@ -65,6 +65,7 @@ const ChatTester = ({ faqs }) => {
           },
         }
       );
+
 
       setBotAnswer(res.data.reply);
       setTokensUsed(res.data.tokensUsed);
