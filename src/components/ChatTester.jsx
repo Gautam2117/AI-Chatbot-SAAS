@@ -45,11 +45,14 @@ const ChatTester = ({ faqs }) => {
         const usageSnap = await getDoc(usageRef);
         if (usageSnap.exists()) {
           const usageData = usageSnap.data();
-          const today = new Date().toDateString();
-          if (usageData.lastReset === today) {
+          const today = new Date().toDateString().trim();
+          const lastReset = (usageData.lastReset || "").toString().trim();
+
+          if (lastReset === today) {
             setTokensUsed(usageData.tokensUsed || 0);
           } else {
-            setTokensUsed(0); // reset token usage if it's a new day
+            console.warn("⏳ Different date detected. Resetting usage.");
+            setTokensUsed(0);
           }
         }
       } catch (err) {
