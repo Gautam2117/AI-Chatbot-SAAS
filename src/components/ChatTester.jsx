@@ -23,29 +23,41 @@ const ChatTester = ({ faqs }) => {
     return "Free";
   };
 
-  // ✅ Fetch tier on mount
+  // ✅ Fetch tier + token usage on mount
   useEffect(() => {
-    const fetchTier = async () => {
+    const fetchUserData = async () => {
       if (!user?.uid) return;
+
       try {
-        const docRef = doc(db, "users", user.uid);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const userData = docSnap.data();
+        const userRef = doc(db, "users", user.uid);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
           const firestoreTier = userData.tier || "free";
           setTier(firestoreTier);
 
-          // Set daily limit based on plan
           if (firestoreTier === "pro") setDailyLimit(5000);
           else if (firestoreTier === "unlimited") setDailyLimit(999999);
           else setDailyLimit(2000);
         }
+
+        const usageRef = doc(db, "usage", user.uid);
+        const usageSnap = await getDoc(usageRef);
+        if (usageSnap.exists()) {
+          const usageData = usageSnap.data();
+          const today = new Date().toDateString();
+          if (usageData.lastReset === today) {
+            setTokensUsed(usageData.tokensUsed || 0);
+          } else {
+            setTokensUsed(0); // reset token usage if it's a new day
+          }
+        }
       } catch (err) {
-        console.warn("❌ Failed to fetch tier from Firestore:", err.message);
+        console.warn("❌ Error fetching user data from Firestore:", err.message);
       }
     };
 
-    fetchTier();
+    fetchUserData();
   }, [user]);
 
   const testChat = async () => {
@@ -54,7 +66,7 @@ const ChatTester = ({ faqs }) => {
 
     try {
       const res = await axios.post(
-        `${import.meta.env.VITE_API_BASE_URL}/api/chat`, // ✅ dynamic
+        `${import.meta.env.VITE_API_BASE_URL}/api/chat`,
         {
           question: userQ,
           faqs: faqs,
@@ -65,7 +77,6 @@ const ChatTester = ({ faqs }) => {
           },
         }
       );
-
 
       setBotAnswer(res.data.reply);
       setTokensUsed(res.data.tokensUsed);
