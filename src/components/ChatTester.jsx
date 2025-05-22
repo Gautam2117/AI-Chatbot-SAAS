@@ -2,7 +2,7 @@ import React, { useContext, useState, useEffect } from "react";
 import axios from "axios";
 import { AuthContext } from "../context/AuthProvider";
 import { db } from "../firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, Timestamp } from "firebase/firestore";
 
 const ChatTester = ({ faqs }) => {
   const { user } = useContext(AuthContext);
@@ -29,6 +29,7 @@ const ChatTester = ({ faqs }) => {
       if (!user?.uid) return;
 
       try {
+        // Tier check
         const userRef = doc(db, "users", user.uid);
         const userSnap = await getDoc(userRef);
         if (userSnap.exists()) {
@@ -41,22 +42,22 @@ const ChatTester = ({ faqs }) => {
           else setDailyLimit(2000);
         }
 
+        // Usage check
         const usageRef = doc(db, "usage", user.uid);
         const usageSnap = await getDoc(usageRef);
         if (usageSnap.exists()) {
           const usageData = usageSnap.data();
-          const today = new Date().toDateString().trim();
-          const lastReset = (usageData.lastReset || "").toString().trim();
+          const today = new Date().toDateString();
 
+          const lastReset = usageData.lastReset?.toDate().toDateString?.();
           if (lastReset === today) {
             setTokensUsed(usageData.tokensUsed || 0);
           } else {
-            console.warn("⏳ Different date detected. Resetting usage.");
-            setTokensUsed(0);
+            setTokensUsed(0); // New day, usage reset
           }
         }
       } catch (err) {
-        console.warn("❌ Error fetching user data from Firestore:", err.message);
+        console.warn("❌ Error fetching user usage/tier:", err.message);
       }
     };
 
@@ -85,7 +86,7 @@ const ChatTester = ({ faqs }) => {
       setTokensUsed(res.data.tokensUsed);
       setDailyLimit(res.data.dailyLimit);
       setTier(res.data.tier || "free");
-      console.log("🔁 Tier from backend:", res.data.tier);
+
     } catch (err) {
       setBotAnswer(err.response?.data?.error || "❌ Error getting response.");
     } finally {
