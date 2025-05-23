@@ -91,9 +91,43 @@ const ChatTester = ({ faqs }) => {
     }
   };
 
-  const handleCheckout = (plan) => {
-    alert(`🛒 Selected: ${plan}. Razorpay integration coming next.`);
-    setShowPricing(false);
+  const handleCheckout = async (plan) => {
+    const amount = plan === "pro" ? 99 : 249;
+
+    try {
+      const res = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/create-order`, {
+        amount,
+      });
+
+      const { orderId, amount: razorAmount, currency } = res.data;
+
+      const options = {
+        key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+        amount: razorAmount,
+        currency,
+        name: "AI Chatbot SaaS",
+        description: `Upgrade to ${plan} Plan`,
+        order_id: orderId,
+        handler: async function (response) {
+          alert("✅ Payment Successful! 🎉 You will be upgraded shortly.");
+          // You can update Firestore here with the new plan if needed
+        },
+        prefill: {
+          name: user?.displayName || "User",
+          email: user?.email || "test@example.com",
+        },
+        theme: {
+          color: "#4f46e5",
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.open();
+      setShowPricing(false);
+    } catch (err) {
+      alert("❌ Failed to initiate payment.");
+      console.error(err);
+    }
   };
 
   return (
