@@ -13,6 +13,7 @@ const ChatTester = ({ faqs }) => {
   const [tokensUsed, setTokensUsed] = useState(0);
   const [dailyLimit, setDailyLimit] = useState(2000);
   const [tier, setTier] = useState("free");
+  const [showPricing, setShowPricing] = useState(false);
 
   const percentUsed = Math.min(100, Math.round((tokensUsed / dailyLimit) * 100));
   const isNearLimit = percentUsed >= 90;
@@ -23,13 +24,11 @@ const ChatTester = ({ faqs }) => {
     return "Free";
   };
 
-  // ✅ Fetch tier + token usage on mount
   useEffect(() => {
     const fetchUserData = async () => {
       if (!user?.uid) return;
 
       try {
-        // Tier check
         const userRef = doc(db, "users", user.uid);
         const userSnap = await getDoc(userRef);
         if (userSnap.exists()) {
@@ -42,18 +41,16 @@ const ChatTester = ({ faqs }) => {
           else setDailyLimit(2000);
         }
 
-        // Usage check
         const usageRef = doc(db, "usage", user.uid);
         const usageSnap = await getDoc(usageRef);
         if (usageSnap.exists()) {
           const usageData = usageSnap.data();
           const today = new Date().toDateString();
-
           const lastReset = usageData.lastReset?.toDate().toDateString?.();
           if (lastReset === today) {
             setTokensUsed(usageData.tokensUsed || 0);
           } else {
-            setTokensUsed(0); // New day, usage reset
+            setTokensUsed(0);
           }
         }
       } catch (err) {
@@ -94,6 +91,11 @@ const ChatTester = ({ faqs }) => {
     }
   };
 
+  const handleCheckout = (plan) => {
+    alert(`🛒 Selected: ${plan}. Razorpay integration coming next.`);
+    setShowPricing(false);
+  };
+
   return (
     <div className="bg-white rounded-xl shadow p-6 space-y-4">
       <h2 className="text-xl font-semibold text-pink-600">🤖 Test Chatbot</h2>
@@ -128,7 +130,7 @@ const ChatTester = ({ faqs }) => {
         </div>
       )}
 
-      <div className="mt-4 space-y-1">
+      <div className="mt-4 space-y-2">
         <div className="text-sm font-medium text-gray-600">
           Token Usage: {tokensUsed} / {dailyLimit}
         </div>
@@ -141,7 +143,54 @@ const ChatTester = ({ faqs }) => {
             style={{ width: `${percentUsed}%` }}
           />
         </div>
+
+        <button
+          onClick={() => setShowPricing(true)}
+          className="mt-3 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition"
+        >
+          💳 Upgrade Plan
+        </button>
       </div>
+
+      {showPricing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white rounded-lg w-[90%] max-w-md p-6 shadow-xl relative">
+            <button
+              onClick={() => setShowPricing(false)}
+              className="absolute top-2 right-3 text-gray-500 hover:text-black"
+            >
+              ❌
+            </button>
+            <h2 className="text-2xl font-semibold mb-4 text-indigo-700">Upgrade Your Plan</h2>
+
+            <div className="space-y-4">
+              <div className="border rounded p-4 hover:shadow-md">
+                <h3 className="text-lg font-bold">Pro Plan</h3>
+                <p className="text-sm text-gray-600">Get 5,000 tokens/day</p>
+                <p className="text-indigo-600 font-semibold">₹99/month</p>
+                <button
+                  onClick={() => handleCheckout("pro")}
+                  className="mt-2 bg-indigo-600 text-white px-3 py-1 rounded"
+                >
+                  Choose Plan
+                </button>
+              </div>
+
+              <div className="border rounded p-4 hover:shadow-md">
+                <h3 className="text-lg font-bold">Unlimited Plan</h3>
+                <p className="text-sm text-gray-600">Unlimited tokens/day</p>
+                <p className="text-indigo-600 font-semibold">₹249/month</p>
+                <button
+                  onClick={() => handleCheckout("unlimited")}
+                  className="mt-2 bg-indigo-600 text-white px-3 py-1 rounded"
+                >
+                  Choose Plan
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
