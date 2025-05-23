@@ -162,57 +162,52 @@ export default function AdminDashboard() {
   const totalPages = Math.ceil(filteredData.length / rowsPerPage);
 
   return (
-    <div className="min-h-screen bg-gray-100 p-8">
-      <h1 className="text-2xl font-bold text-indigo-700 mb-6">📊 User Usage Overview</h1>
+    <div className="min-h-screen bg-gradient-to-br from-white to-gray-100 p-6 md:p-10">
+      <h1 className="text-3xl font-bold text-indigo-700 mb-8 text-center drop-shadow-md">Admin Usage Analytics Dashboard</h1>
 
-      <div className="flex flex-wrap gap-4 mb-4">
+      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <input
           type="text"
           placeholder="Search by email or UID"
-          className="px-4 py-2 border rounded"
+          className="px-4 py-2 border rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={onlyPaid}
-            onChange={(e) => setOnlyPaid(e.target.checked)}
-          />
-          Only Paid Users
-        </label>
         <DatePicker
           selected={startDate}
           onChange={(date) => setStartDate(date)}
           placeholderText="Start Date"
-          className="px-2 py-1 border rounded"
+          className="px-4 py-2 border rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
         />
         <DatePicker
           selected={endDate}
           onChange={(date) => setEndDate(date)}
           placeholderText="End Date"
-          className="px-2 py-1 border rounded"
+          className="px-4 py-2 border rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
         />
-        <button
-          onClick={exportCSV}
-          className="bg-green-600 text-white px-4 py-2 rounded"
-        >
-          ⬇️ Export CSV
-        </button>
-        <button
-          onClick={exportPDF}
-          className="bg-blue-600 text-white px-4 py-2 rounded"
-        >
-          📄 Export PDF
-        </button>
+        <label className="flex items-center justify-start gap-2">
+          <input type="checkbox" checked={onlyPaid} onChange={(e) => setOnlyPaid(e.target.checked)} />
+          <span className="text-sm">Only Paid Users</span>
+        </label>
       </div>
 
-      <div className="mb-6">
-        <h2 className="text-lg font-semibold mb-2 text-gray-700">Usage Graph</h2>
+      <div className="flex flex-wrap gap-3 justify-end mb-6">
+        <button
+          onClick={exportCSV}
+          className="bg-green-600 text-white px-5 py-2 rounded hover:bg-green-700 transition"
+        >⬇️ CSV</button>
+        <button
+          onClick={exportPDF}
+          className="bg-blue-600 text-white px-5 py-2 rounded hover:bg-blue-700 transition"
+        >📄 PDF</button>
+      </div>
+
+      <div className="bg-white p-4 rounded-lg shadow mb-10">
+        <h2 className="text-lg font-semibold mb-4 text-indigo-700">📊 Token Usage Distribution</h2>
         <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={filteredData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+          <BarChart data={filteredData} margin={{ top: 10, right: 30, left: 0, bottom: 10 }}>
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="email" interval={0} angle={-20} textAnchor="end" height={80} />
+            <XAxis dataKey="email" interval={0} angle={-25} textAnchor="end" height={100} />
             <YAxis />
             <Tooltip />
             <Bar dataKey="tokensUsed" fill="#4F46E5" />
@@ -220,28 +215,28 @@ export default function AdminDashboard() {
         </ResponsiveContainer>
       </div>
 
-      <div className="overflow-x-auto bg-white shadow rounded-lg p-4">
-        <table className="w-full text-sm text-left text-gray-700">
-          <thead className="bg-indigo-100 text-indigo-700">
+      <div className="overflow-x-auto bg-white shadow-md rounded-lg">
+        <table className="w-full text-sm text-left">
+          <thead className="text-xs text-gray-700 uppercase bg-indigo-50">
             <tr>
-              <th className="px-4 py-2">User ID</th>
-              <th className="px-4 py-2">Email</th>
-              <th className="px-4 py-2">Plan</th>
-              <th className="px-4 py-2">Tokens Used</th>
-              <th className="px-4 py-2">Last Reset</th>
-              <th className="px-4 py-2">Actions</th>
+              <th className="px-4 py-3">User ID</th>
+              <th className="px-4 py-3">Email</th>
+              <th className="px-4 py-3">Plan</th>
+              <th className="px-4 py-3">Tokens Used</th>
+              <th className="px-4 py-3">Last Reset</th>
+              <th className="px-4 py-3">Actions</th>
             </tr>
           </thead>
           <tbody>
             {paginated.map((u) => (
-              <tr key={u.userId} className={u.tokensUsed > 1000 ? "bg-yellow-50" : ""}>
-                <td className="px-4 py-2 font-mono text-xs">{u.userId}</td>
+              <tr key={u.userId} className={`border-t ${u.tokensUsed > 1000 ? "bg-yellow-50" : ""}`}>
+                <td className="px-4 py-2 font-mono text-xs text-gray-600">{u.userId}</td>
                 <td className="px-4 py-2">{u.email}</td>
                 <td className="px-4 py-2">
                   <select
                     value={u.tier}
                     onChange={(e) => updateTier(u.userId, e.target.value)}
-                    className="border rounded px-2 py-1"
+                    className="border rounded px-2 py-1 focus:ring-1"
                   >
                     <option value="free">Free</option>
                     <option value="pro">Pro</option>
@@ -253,34 +248,26 @@ export default function AdminDashboard() {
                 <td className="px-4 py-2">
                   <button
                     onClick={() => resetTokens(u.userId)}
-                    className="text-xs bg-red-500 text-white px-2 py-1 rounded"
-                  >
-                    Reset
-                  </button>
+                    className="text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600 transition"
+                  >Reset</button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
 
-        <div className="mt-4 flex justify-between items-center">
+        <div className="mt-6 px-4 py-3 flex justify-between items-center">
           <button
             disabled={page === 1}
             onClick={() => setPage((p) => p - 1)}
-            className="px-3 py-1 bg-gray-300 rounded disabled:opacity-50"
-          >
-            ◀ Prev
-          </button>
-          <span>
-            Page {page} of {totalPages}
-          </span>
+            className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50"
+          >◀ Prev</button>
+          <span className="text-sm text-gray-600">Page {page} of {totalPages}</span>
           <button
             disabled={page === totalPages}
             onClick={() => setPage((p) => p + 1)}
-            className="px-3 py-1 bg-gray-300 rounded disabled:opacity-50"
-          >
-            Next ▶
-          </button>
+            className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50"
+          >Next ▶</button>
         </div>
       </div>
     </div>
