@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useContext } from "react";
 import { db } from "../firebase";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, doc, getDoc } from "firebase/firestore";
 import { AuthContext } from "../context/AuthProvider";
 import { useNavigate } from "react-router-dom";
 
@@ -20,21 +20,47 @@ export default function AdminDashboard() {
   useEffect(() => {
     const fetchUsage = async () => {
       const snapshot = await getDocs(collection(db, "usage"));
-      const data = snapshot.docs.map(doc => ({
-        userId: doc.id,
-        ...doc.data(),
-      }));
-      setUsageData(data);
-      setFilteredData(data); // default view
+
+      const dataWithUserInfo = await Promise.all(
+        snapshot.docs.map(async (docSnap) => {
+          const userId = docSnap.id;
+          const usage = docSnap.data();
+
+          let email = "N/A";
+          let tier = "N/A";
+
+          try {
+            const userDoc = await getDoc(doc(db, "users", userId));
+            if (userDoc.exists()) {
+              const userData = userDoc.data();
+              email = userData.email || "N/A";
+              tier = userData.tier || "free";
+            }
+          } catch (err) {
+            console.warn(`❌ Failed to fetch user info for ${userId}`, err.message);
+          }
+
+          return {
+            userId,
+            tokensUsed: usage.tokensUsed || 0,
+            lastReset: usage.lastReset,
+            email,
+            tier,
+          };
+        })
+      );
+
+      setUsageData(dataWithUserInfo);
+      setFilteredData(dataWithUserInfo);
     };
 
     fetchUsage();
   }, []);
 
-  // 🔍 Filter when search term changes
   useEffect(() => {
     const filtered = usageData.filter((u) =>
-      u.userId.toLowerCase().includes(searchTerm.toLowerCase())
+      u.userId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.email.toLowerCase().includes(searchTerm.toLowerCase())
     );
     setFilteredData(filtered);
   }, [searchTerm, usageData]);
@@ -47,7 +73,7 @@ export default function AdminDashboard() {
 
       <input
         type="text"
-        placeholder="Search by User ID..."
+        placeholder="Search by User ID or Email..."
         className="mb-4 w-full md:w-1/2 px-4 py-2 border border-gray-300 rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
@@ -58,6 +84,8 @@ export default function AdminDashboard() {
           <thead className="bg-indigo-100 text-indigo-700">
             <tr>
               <th className="px-4 py-2">User ID</th>
+              <th className="px-4 py-2">Email</th>
+              <th className="px-4 py-2">Plan</th>
               <th className="px-4 py-2">Tokens Used</th>
               <th className="px-4 py-2">Last Reset</th>
             </tr>
@@ -67,6 +95,8 @@ export default function AdminDashboard() {
               filteredData.map((u) => (
                 <tr key={u.userId} className="border-t">
                   <td className="px-4 py-2 font-mono text-xs">{u.userId}</td>
+                  <td className="px-4 py-2">{u.email}</td>
+                  <td className="px-4 py-2 capitalize">{u.tier}</td>
                   <td className="px-4 py-2">{u.tokensUsed}</td>
                   <td className="px-4 py-2">
                     {typeof u.lastReset === "string"
@@ -77,7 +107,7 @@ export default function AdminDashboard() {
               ))
             ) : (
               <tr>
-                <td colSpan={3} className="px-4 py-4 text-center text-gray-500">
+                <td colSpan={5} className="px-4 py-4 text-center text-gray-500">
                   No users found.
                 </td>
               </tr>
