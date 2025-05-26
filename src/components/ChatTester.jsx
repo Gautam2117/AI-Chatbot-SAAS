@@ -2,7 +2,7 @@ import React, { useContext, useState, useEffect } from "react";
 import axios from "axios";
 import { AuthContext } from "../context/AuthProvider";
 import { db } from "../firebase";
-import { doc, getDoc, Timestamp } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 
 const ChatTester = ({ faqs }) => {
   const { user } = useContext(AuthContext);
@@ -83,7 +83,6 @@ const ChatTester = ({ faqs }) => {
       setTokensUsed(res.data.tokensUsed);
       setDailyLimit(res.data.dailyLimit);
       setTier(res.data.tier || "free");
-
     } catch (err) {
       setBotAnswer(err.response?.data?.error || "❌ Error getting response.");
     } finally {
@@ -109,8 +108,19 @@ const ChatTester = ({ faqs }) => {
         description: `Upgrade to ${plan} Plan`,
         order_id: orderId,
         handler: async function (response) {
-          alert("✅ Payment Successful! 🎉 You will be upgraded shortly.");
-          // You can update Firestore here with the new plan if needed
+          alert("✅ Payment Successful! 🎉 Upgrading your plan...");
+          // 🔥 Firestore Plan Upgrade Logic (via backend)
+          try {
+            await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/upgrade-tier`, {
+              userId: user.uid,
+              plan,
+            });
+            setTier(plan); // Update local state to reflect new tier
+            setShowPricing(false);
+          } catch (err) {
+            alert("❌ Upgrade failed. Contact support.");
+            console.error(err);
+          }
         },
         prefill: {
           name: user?.displayName || "User",
@@ -123,7 +133,6 @@ const ChatTester = ({ faqs }) => {
 
       const rzp = new window.Razorpay(options);
       rzp.open();
-      setShowPricing(false);
     } catch (err) {
       alert("❌ Failed to initiate payment.");
       console.error(err);
