@@ -24,6 +24,10 @@ const ChatTester = ({ faqs }) => {
     return "Free";
   };
 
+  // Debug: Print API Base URL at runtime
+  const BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://ai-chatbot-backend-h669.onrender.com";
+  console.log("🚀 VITE_API_BASE_URL:", import.meta.env.VITE_API_BASE_URL);
+
   useEffect(() => {
     const fetchUserData = async () => {
       if (!user?.uid) return;
@@ -67,7 +71,7 @@ const ChatTester = ({ faqs }) => {
 
     try {
       const res = await axios.post(
-        `${import.meta.env.VITE_API_BASE_URL}/api/chat`,
+        `${BASE_URL}/api/chat`,
         {
           question: userQ,
           faqs: faqs,
@@ -94,7 +98,7 @@ const ChatTester = ({ faqs }) => {
     const amount = plan === "pro" ? 99 : 249;
 
     try {
-      const res = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/create-order`, {
+      const res = await axios.post(`${BASE_URL}/api/create-order`, {
         amount,
         userId: user?.uid || "guest-user",
         plan,
@@ -112,8 +116,7 @@ const ChatTester = ({ faqs }) => {
         handler: async function (response) {
           alert("✅ Payment Successful! 🎉 Upgrading your plan...");
           try {
-            // Optional, for immediate upgrade: 
-            await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/upgrade-tier`, {
+            await axios.post(`${BASE_URL}/api/upgrade-tier`, {
               userId: user.uid,
               plan,
             });
