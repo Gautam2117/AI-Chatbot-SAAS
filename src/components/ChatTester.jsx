@@ -2,7 +2,7 @@ import React, { useContext, useState, useEffect } from "react";
 import axios from "axios";
 import { AuthContext } from "../context/AuthProvider";
 import { db } from "../firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
 
 const ChatTester = ({ faqs }) => {
   const { user } = useContext(AuthContext);
@@ -15,22 +15,14 @@ const ChatTester = ({ faqs }) => {
   const [tier, setTier] = useState("free");
   const [showPricing, setShowPricing] = useState(false);
 
-  const percentUsed = Math.min(100, Math.round((tokensUsed / dailyLimit) * 100));
-  const isNearLimit = percentUsed >= 90;
-
-  const getPlanName = () => {
-    if (tier === "pro") return "Pro";
-    if (tier === "unlimited") return "Unlimited";
-    return "Free";
-  };
-
-  // Debug: Print API Base URL at runtime
   const BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://ai-chatbot-backend-h669.onrender.com";
-  console.log("🚀 VITE_API_BASE_URL:", import.meta.env.VITE_API_BASE_URL);
 
   useEffect(() => {
     const fetchUserData = async () => {
-      if (!user?.uid) return;
+      if (!user?.uid) {
+        console.warn("🔒 User not logged in. Skipping usage fetch.");
+        return;
+      }
 
       try {
         const userRef = doc(db, "users", user.uid);
@@ -39,10 +31,12 @@ const ChatTester = ({ faqs }) => {
           const userData = userSnap.data();
           const firestoreTier = userData.tier || "free";
           setTier(firestoreTier);
-
-          if (firestoreTier === "pro") setDailyLimit(5000);
-          else if (firestoreTier === "unlimited") setDailyLimit(999999);
-          else setDailyLimit(2000);
+          setDailyLimit(firestoreTier === "pro" ? 5000 : firestoreTier === "unlimited" ? 999999 : 2000);
+        } else {
+          // Create user doc if missing
+          await setDoc(userRef, { email: user.email, role: "user", tier: "free" });
+          setTier("free");
+          setDailyLimit(2000);
         }
 
         const usageRef = doc(db, "usage", user.uid);
@@ -51,11 +45,11 @@ const ChatTester = ({ faqs }) => {
           const usageData = usageSnap.data();
           const today = new Date().toDateString();
           const lastReset = usageData.lastReset?.toDate().toDateString?.();
-          if (lastReset === today) {
-            setTokensUsed(usageData.tokensUsed || 0);
-          } else {
-            setTokensUsed(0);
-          }
+          setTokensUsed(lastReset === today ? usageData.tokensUsed : 0);
+        } else {
+          // Create usage doc if missing
+          await setDoc(usageRef, { tokensUsed: 0, lastReset: Timestamp.now() });
+          setTokensUsed(0);
         }
       } catch (err) {
         console.warn("❌ Error fetching user usage/tier:", err.message);
@@ -66,22 +60,23 @@ const ChatTester = ({ faqs }) => {
   }, [user]);
 
   const testChat = async () => {
+    if (!user?.uid) {
+      alert("🔒 Please log in to use the chatbot.");
+      return;
+    }
+
     setLoading(true);
     setBotAnswer("");
 
     try {
-      const res = await axios.post(
-        `${BASE_URL}/api/chat`,
-        {
-          question: userQ,
-          faqs: faqs,
+      const res = await axios.post(`${BASE_URL}/api/chat`, {
+        question: userQ,
+        faqs,
+      }, {
+        headers: {
+          "x-user-id": user.uid,
         },
-        {
-          headers: {
-            "x-user-id": user?.uid || "guest-user",
-          },
-        }
-      );
+      });
 
       setBotAnswer(res.data.reply);
       setTokensUsed(res.data.tokensUsed);
@@ -95,12 +90,17 @@ const ChatTester = ({ faqs }) => {
   };
 
   const handleCheckout = async (plan) => {
+    if (!user?.uid) {
+      alert("🔒 Please log in to upgrade.");
+      return;
+    }
+
     const amount = plan === "pro" ? 99 : 249;
 
     try {
       const res = await axios.post(`${BASE_URL}/api/create-order`, {
         amount,
-        userId: user?.uid || "guest-user",
+        userId: user.uid,
         plan,
       });
 
@@ -148,65 +148,66 @@ const ChatTester = ({ faqs }) => {
     <div className="bg-white rounded-xl shadow p-6 space-y-4">
       <h2 className="text-xl font-semibold text-pink-600">🤖 Test Chatbot</h2>
 
-      {isNearLimit && (
-        <div className="p-3 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 text-sm rounded">
-          ⚠️ You’ve used {percentUsed}% of your daily token limit. You may be blocked soon.
-        </div>
+      {!user?.uid ? (
+        <p className="text-red-600">🔒 Please log in to use the chatbot.</p>
+      ) : (
+        <>
+          {isNearLimit && (
+            <div className="p-3 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 text-sm rounded">
+              ⚠️ You’ve used {percentUsed}% of your daily token limit. You may be blocked soon.
+            </div>
+          )}
+
+          <div className="flex flex-col md:flex-row gap-4">
+            <input
+              type="text"
+              className="border px-4 py-2 rounded w-full focus:ring-2 focus:ring-pink-300"
+              placeholder="Ask something..."
+              value={userQ}
+              onChange={(e) => setUserQ(e.target.value)}
+            />
+            <button
+              onClick={testChat}
+              disabled={loading}
+              className="bg-pink-600 text-white px-5 py-2 rounded hover:bg-pink-700"
+            >
+              {loading ? "Thinking..." : "💬 Ask Bot"}
+            </button>
+          </div>
+
+          {botAnswer && (
+            <div className="p-4 bg-pink-50 border border-pink-200 rounded text-gray-800">
+              <strong className="text-pink-800">Bot:</strong>
+              <p className="mt-1 whitespace-pre-wrap">{botAnswer}</p>
+            </div>
+          )}
+
+          <div className="mt-4 space-y-2">
+            <div className="text-sm font-medium text-gray-600">
+              Token Usage: {tokensUsed} / {dailyLimit}
+            </div>
+            <p className="text-xs italic text-gray-500">Plan: {getPlanName()}</p>
+            <div className="w-full bg-gray-200 rounded-full h-3">
+              <div
+                className={`h-3 rounded-full transition-all duration-500 ${percentUsed >= 100 ? "bg-red-500" : "bg-green-500"}`}
+                style={{ width: `${percentUsed}%` }}
+              />
+            </div>
+
+            <button
+              onClick={() => setShowPricing(true)}
+              className="mt-3 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition"
+            >
+              💳 Upgrade Plan
+            </button>
+          </div>
+        </>
       )}
-
-      <div className="flex flex-col md:flex-row gap-4">
-        <input
-          type="text"
-          className="border px-4 py-2 rounded w-full focus:ring-2 focus:ring-pink-300"
-          placeholder="Ask something..."
-          value={userQ}
-          onChange={(e) => setUserQ(e.target.value)}
-        />
-        <button
-          onClick={testChat}
-          disabled={loading}
-          className="bg-pink-600 text-white px-5 py-2 rounded hover:bg-pink-700"
-        >
-          {loading ? "Thinking..." : "💬 Ask Bot"}
-        </button>
-      </div>
-
-      {botAnswer && (
-        <div className="p-4 bg-pink-50 border border-pink-200 rounded text-gray-800">
-          <strong className="text-pink-800">Bot:</strong>
-          <p className="mt-1 whitespace-pre-wrap">{botAnswer}</p>
-        </div>
-      )}
-
-      <div className="mt-4 space-y-2">
-        <div className="text-sm font-medium text-gray-600">
-          Token Usage: {tokensUsed} / {dailyLimit}
-        </div>
-        <p className="text-xs italic text-gray-500">Plan: {getPlanName()}</p>
-        <div className="w-full bg-gray-200 rounded-full h-3">
-          <div
-            className={`h-3 rounded-full transition-all duration-500 ${
-              percentUsed >= 100 ? "bg-red-500" : "bg-green-500"
-            }`}
-            style={{ width: `${percentUsed}%` }}
-          />
-        </div>
-
-        <button
-          onClick={() => setShowPricing(true)}
-          className="mt-3 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition"
-        >
-          💳 Upgrade Plan
-        </button>
-      </div>
 
       {showPricing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
           <div className="bg-white rounded-lg w-[90%] max-w-md p-6 shadow-xl relative">
-            <button
-              onClick={() => setShowPricing(false)}
-              className="absolute top-2 right-3 text-gray-500 hover:text-black"
-            >
+            <button onClick={() => setShowPricing(false)} className="absolute top-2 right-3 text-gray-500 hover:text-black">
               ❌
             </button>
             <h2 className="text-2xl font-semibold mb-4 text-indigo-700">Upgrade Your Plan</h2>
@@ -216,10 +217,7 @@ const ChatTester = ({ faqs }) => {
                 <h3 className="text-lg font-bold">Pro Plan</h3>
                 <p className="text-sm text-gray-600">Get 5,000 tokens/day</p>
                 <p className="text-indigo-600 font-semibold">₹99/month</p>
-                <button
-                  onClick={() => handleCheckout("pro")}
-                  className="mt-2 bg-indigo-600 text-white px-3 py-1 rounded"
-                >
+                <button onClick={() => handleCheckout("pro")} className="mt-2 bg-indigo-600 text-white px-3 py-1 rounded">
                   Choose Plan
                 </button>
               </div>
@@ -228,10 +226,7 @@ const ChatTester = ({ faqs }) => {
                 <h3 className="text-lg font-bold">Unlimited Plan</h3>
                 <p className="text-sm text-gray-600">Unlimited tokens/day</p>
                 <p className="text-indigo-600 font-semibold">₹249/month</p>
-                <button
-                  onClick={() => handleCheckout("unlimited")}
-                  className="mt-2 bg-indigo-600 text-white px-3 py-1 rounded"
-                >
+                <button onClick={() => handleCheckout("unlimited")} className="mt-2 bg-indigo-600 text-white px-3 py-1 rounded">
                   Choose Plan
                 </button>
               </div>
