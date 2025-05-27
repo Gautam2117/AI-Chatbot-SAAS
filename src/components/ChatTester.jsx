@@ -96,6 +96,8 @@ const ChatTester = ({ faqs }) => {
     try {
       const res = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/create-order`, {
         amount,
+        userId: user?.uid || "guest-user",
+        plan,
       });
 
       const { orderId, amount: razorAmount, currency } = res.data;
@@ -109,13 +111,13 @@ const ChatTester = ({ faqs }) => {
         order_id: orderId,
         handler: async function (response) {
           alert("✅ Payment Successful! 🎉 Upgrading your plan...");
-          // 🔥 Firestore Plan Upgrade Logic (via backend)
           try {
+            // Optional, for immediate upgrade: 
             await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/upgrade-tier`, {
               userId: user.uid,
               plan,
             });
-            setTier(plan); // Update local state to reflect new tier
+            setTier(plan);
             setShowPricing(false);
           } catch (err) {
             alert("❌ Upgrade failed. Contact support.");

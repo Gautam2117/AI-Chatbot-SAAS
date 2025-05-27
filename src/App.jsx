@@ -1,25 +1,31 @@
 import React, { useState, useContext, useEffect } from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, Link } from "react-router-dom";
 import FAQForm from "./components/FAQForm";
 import ChatTester from "./components/ChatTester";
 import { AuthContext } from "./context/AuthProvider";
-import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { auth } from "./firebase";
 
-export default function App() {
+// KYC Pages
+import About from "./pages/About";
+import Contact from "./pages/Contact";
+import Pricing from "./pages/Pricing";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import Terms from "./pages/Terms";
+import RefundPolicy from "./pages/RefundPolicy";
+import CookiePolicy from "./pages/CookiePolicy"; // Make sure this exists
+import Disclaimer from "./pages/Disclaimer";     // Make sure this exists
+
+const MainContent = () => {
   const [faqs, setFaqs] = useState([]);
-  const { user, role } = useContext(AuthContext); // 🔑 role from Firestore
+  const { user, role } = useContext(AuthContext);
   const navigate = useNavigate();
 
-  // Redirect to login if not authenticated
   useEffect(() => {
-    if (!user) {
-      navigate("/login");
-    }
+    if (!user) navigate("/login");
   }, [user, navigate]);
 
-  // Don’t render until user is available
-  if (!user) return null;
+  if (!user) return <Navigate to="/login" replace />;
 
   const isAdmin = role === "admin";
 
@@ -38,7 +44,6 @@ export default function App() {
           </button>
         </div>
 
-        {/* Admin-only Feature Example */}
         {isAdmin && (
           <div className="p-4 bg-indigo-50 border border-indigo-200 rounded space-y-2">
             <h2 className="font-semibold text-indigo-700">🔧 Admin Panel</h2>
@@ -53,9 +58,59 @@ export default function App() {
             </a>
           </div>
         )}
+
+        {/* FAQ Management + Chatbot */}
         <FAQForm faqs={faqs} setFaqs={setFaqs} />
         <ChatTester faqs={faqs} />
+
+        {/* 🔗 Enhanced Footer with Navigation Links */}
+        <footer className="pt-8 mt-10 border-t border-indigo-200">
+          <nav className="flex flex-wrap gap-4 justify-center text-sm text-indigo-600 font-medium">
+            <Link to="/about" className="hover:text-indigo-900 transition-colors">About</Link>
+            <span className="text-gray-400">|</span>
+            <Link to="/contact" className="hover:text-indigo-900 transition-colors">Contact</Link>
+            <span className="text-gray-400">|</span>
+            <Link to="/pricing" className="hover:text-indigo-900 transition-colors">Pricing</Link>
+            <span className="text-gray-400">|</span>
+            <Link to="/privacy-policy" className="hover:text-indigo-900 transition-colors">Privacy Policy</Link>
+            <span className="text-gray-400">|</span>
+            <Link to="/terms" className="hover:text-indigo-900 transition-colors">Terms & Conditions</Link>
+            <span className="text-gray-400">|</span>
+            <Link to="/refund-policy" className="hover:text-indigo-900 transition-colors">Refund Policy</Link>
+            <span className="text-gray-400">|</span>
+            <Link to="/cookie-policy" className="hover:text-indigo-900 transition-colors">Cookie Policy</Link>
+            <span className="text-gray-400">|</span>
+            <Link to="/disclaimer" className="hover:text-indigo-900 transition-colors">Disclaimer</Link>
+          </nav>
+          <p className="text-center text-xs text-gray-500 mt-4">
+            &copy; {new Date().getFullYear()} AI Chatbot SaaS. All rights reserved.
+          </p>
+        </footer>
       </div>
     </main>
+  );
+};
+
+export default function App() {
+  return (
+    <Router>
+      <Routes>
+        {/* Main Chatbot Dashboard */}
+        <Route path="/" element={<MainContent />} />
+
+        {/* KYC Pages */}
+        <Route path="/about" element={<About />} />
+        <Route path="/contact" element={<Contact />} />
+        <Route path="/pricing" element={<Pricing />} />
+        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/refund-policy" element={<RefundPolicy />} />
+        <Route path="/cookie-policy" element={<CookiePolicy />} />
+        <Route path="/disclaimer" element={<Disclaimer />} />
+
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Router>
   );
 }
