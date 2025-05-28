@@ -18,13 +18,14 @@ import Disclaimer from "./pages/Disclaimer";     // Make sure this exists
 
 const MainContent = () => {
   const [faqs, setFaqs] = useState([]);
-  const { user, role } = useContext(AuthContext);
+  const { user, role, loading } = useContext(AuthContext);
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!user) navigate("/login");
   }, [user, navigate]);
 
+  if (loading) return <div>Loading...</div>;
   if (!user) return <Navigate to="/login" replace />;
 
   const isAdmin = role === "admin";
