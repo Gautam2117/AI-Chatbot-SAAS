@@ -1,5 +1,5 @@
 import React, { useState, useContext, useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, Link } from "react-router-dom";
+import { Routes, Route, Navigate, useNavigate, Link } from "react-router-dom";
 import FAQForm from "./components/FAQForm";
 import ChatTester from "./components/ChatTester";
 import { AuthContext } from "./context/AuthProvider";
@@ -13,8 +13,8 @@ import Pricing from "./pages/Pricing";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import Terms from "./pages/Terms";
 import RefundPolicy from "./pages/RefundPolicy";
-import CookiePolicy from "./pages/CookiePolicy"; // Make sure this exists
-import Disclaimer from "./pages/Disclaimer";     // Make sure this exists
+import CookiePolicy from "./pages/CookiePolicy";
+import Disclaimer from "./pages/Disclaimer";
 
 const MainContent = () => {
   const [faqs, setFaqs] = useState([]);
@@ -60,11 +60,9 @@ const MainContent = () => {
           </div>
         )}
 
-        {/* FAQ Management + Chatbot */}
         <FAQForm faqs={faqs} setFaqs={setFaqs} />
         <ChatTester faqs={faqs} />
 
-        {/* 🔗 Enhanced Footer with Navigation Links */}
         <footer className="pt-8 mt-10 border-t border-indigo-200">
           <nav className="flex flex-wrap gap-4 justify-center text-sm text-indigo-600 font-medium">
             <Link to="/about" className="hover:text-indigo-900 transition-colors">About</Link>
@@ -94,24 +92,16 @@ const MainContent = () => {
 
 export default function App() {
   return (
-    <Router>
-      <Routes>
-        {/* Main Chatbot Dashboard */}
-        <Route path="/" element={<MainContent />} />
-
-        {/* KYC Pages */}
-        <Route path="/about" element={<About />} />
-        <Route path="/contact" element={<Contact />} />
-        <Route path="/pricing" element={<Pricing />} />
-        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-        <Route path="/terms" element={<Terms />} />
-        <Route path="/refund-policy" element={<RefundPolicy />} />
-        <Route path="/cookie-policy" element={<CookiePolicy />} />
-        <Route path="/disclaimer" element={<Disclaimer />} />
-
-        {/* Fallback */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Router>
+    <Routes>
+      <Route path="*" element={<MainContent />} />
+      <Route path="/about" element={<About />} />
+      <Route path="/contact" element={<Contact />} />
+      <Route path="/pricing" element={<Pricing />} />
+      <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+      <Route path="/terms" element={<Terms />} />
+      <Route path="/refund-policy" element={<RefundPolicy />} />
+      <Route path="/cookie-policy" element={<CookiePolicy />} />
+      <Route path="/disclaimer" element={<Disclaimer />} />
+    </Routes>
   );
 }

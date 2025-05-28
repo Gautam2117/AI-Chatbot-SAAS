@@ -144,6 +144,9 @@ const ChatTester = ({ faqs }) => {
     }
   };
 
+  const percentUsed = (tokensUsed / dailyLimit) * 100;
+  const isNearLimit = percentUsed >= 80;
+
   return (
     <div className="bg-white rounded-xl shadow p-6 space-y-4">
       <h2 className="text-xl font-semibold text-pink-600">🤖 Test Chatbot</h2>
@@ -186,7 +189,7 @@ const ChatTester = ({ faqs }) => {
             <div className="text-sm font-medium text-gray-600">
               Token Usage: {tokensUsed} / {dailyLimit}
             </div>
-            <p className="text-xs italic text-gray-500">Plan: {getPlanName()}</p>
+            <p className="text-xs italic text-gray-500">Plan: {tier}</p>
             <div className="w-full bg-gray-200 rounded-full h-3">
               <div
                 className={`h-3 rounded-full transition-all duration-500 ${percentUsed >= 100 ? "bg-red-500" : "bg-green-500"}`}
