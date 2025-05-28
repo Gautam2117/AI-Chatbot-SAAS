@@ -1,22 +1,12 @@
 import React, { useState, useContext, useEffect } from "react";
-import { Routes, Route, Navigate, useNavigate, Link } from "react-router-dom";
+import { Navigate, useNavigate, Link } from "react-router-dom";
 import FAQForm from "./components/FAQForm";
 import ChatTester from "./components/ChatTester";
 import { AuthContext } from "./context/AuthProvider";
 import { signOut } from "firebase/auth";
 import { auth } from "./firebase";
 
-// KYC Pages
-import About from "./pages/About";
-import Contact from "./pages/Contact";
-import Pricing from "./pages/Pricing";
-import PrivacyPolicy from "./pages/PrivacyPolicy";
-import Terms from "./pages/Terms";
-import RefundPolicy from "./pages/RefundPolicy";
-import CookiePolicy from "./pages/CookiePolicy";
-import Disclaimer from "./pages/Disclaimer";
-
-const MainContent = () => {
+export const MainContent = () => {
   const [faqs, setFaqs] = useState([]);
   const { user, role, loading } = useContext(AuthContext);
   const navigate = useNavigate();
@@ -91,17 +81,5 @@ const MainContent = () => {
 };
 
 export default function App() {
-  return (
-    <Routes>
-      <Route path="*" element={<MainContent />} />
-      <Route path="/about" element={<About />} />
-      <Route path="/contact" element={<Contact />} />
-      <Route path="/pricing" element={<Pricing />} />
-      <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-      <Route path="/terms" element={<Terms />} />
-      <Route path="/refund-policy" element={<RefundPolicy />} />
-      <Route path="/cookie-policy" element={<CookiePolicy />} />
-      <Route path="/disclaimer" element={<Disclaimer />} />
-    </Routes>
-  );
+  return <MainContent />;
 }

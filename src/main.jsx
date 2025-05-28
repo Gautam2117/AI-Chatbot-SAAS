@@ -1,11 +1,19 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
-import App from './App';
+import { MainContent } from './App'; // Import MainContent
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import AdminDashboard from "./pages/AdminDashboard";
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import About from './pages/About';
+import Contact from './pages/Contact';
+import Pricing from './pages/Pricing';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import Terms from './pages/Terms';
+import RefundPolicy from './pages/RefundPolicy';
+import CookiePolicy from './pages/CookiePolicy';
+import Disclaimer from './pages/Disclaimer';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthProvider';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -13,10 +21,19 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          <Route path="/" element={<App />} />
+          <Route path="/" element={<MainContent />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/pricing" element={<Pricing />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/refund-policy" element={<RefundPolicy />} />
+          <Route path="/cookie-policy" element={<CookiePolicy />} />
+          <Route path="/disclaimer" element={<Disclaimer />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>
