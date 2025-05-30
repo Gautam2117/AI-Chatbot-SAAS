@@ -23,7 +23,6 @@ const ChatTester = ({ faqs }) => {
         console.warn("🔒 User not logged in. Skipping usage fetch.");
         return;
       }
-
       try {
         const userRef = doc(db, "users", user.uid);
         const userSnap = await getDoc(userRef);
@@ -62,20 +61,15 @@ const ChatTester = ({ faqs }) => {
       alert("🔒 Please log in to use the chatbot.");
       return;
     }
-
     setLoading(true);
     setBotAnswer("");
-
     try {
       const res = await axios.post(`${BASE_URL}/api/chat`, {
         question: userQ,
         faqs,
       }, {
-        headers: {
-          "x-user-id": user.uid,
-        },
+        headers: { "x-user-id": user.uid },
       });
-
       setBotAnswer(res.data.reply);
       setTokensUsed(res.data.tokensUsed);
       setDailyLimit(res.data.dailyLimit);
@@ -105,10 +99,10 @@ const ChatTester = ({ faqs }) => {
       const { orderId, amount: razorAmount, currency } = res.data;
 
       const options = {
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+        key: import.meta.env.VITE_RAZORPAY_KEY_ID, // ✅ Updated
         amount: razorAmount,
         currency,
-        name: "AI Chatbot SaaS",
+        name: "Botify", // ✅ Updated billing label
         description: `Upgrade to ${plan} Plan`,
         order_id: orderId,
         handler: async function (response) {
@@ -129,15 +123,23 @@ const ChatTester = ({ faqs }) => {
           name: user?.displayName || "User",
           email: user?.email || "test@example.com",
         },
-        theme: {
-          color: "#4f46e5",
+        theme: { color: "#4f46e5" },
+        notes: { billing_label: "Botify" }, // ✅ Added billing label
+        modal: {
+          ondismiss: () => {
+            alert("❌ Payment cancelled.");
+          },
         },
       };
 
       const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', function (response) {
+        console.error("❌ Payment failed:", response.error);
+        alert(`❌ Payment failed: ${response.error.description}`);
+      });
       rzp.open();
     } catch (err) {
-      alert("❌ Failed to initiate payment.");
+      alert(`❌ Failed to initiate payment. ${err.message || ''}`);
       console.error(err);
     }
   };
@@ -147,9 +149,7 @@ const ChatTester = ({ faqs }) => {
   const isOverLimit = tokensUsed >= dailyLimit;
 
   useEffect(() => {
-    if (isNearLimit && !isOverLimit) {
-      setShowPricing(true);
-    }
+    if (isNearLimit && !isOverLimit) setShowPricing(true);
   }, [isNearLimit, isOverLimit]);
 
   return (
@@ -162,13 +162,12 @@ const ChatTester = ({ faqs }) => {
         <>
           {isOverLimit && (
             <div className="p-3 bg-red-100 border-l-4 border-red-500 text-red-800 text-sm rounded">
-              ❌ You've hit your daily token limit ({tokensUsed}/{dailyLimit}). Upgrade your plan to continue using the chatbot.
+              ❌ You've hit your daily token limit ({tokensUsed}/{dailyLimit}). Upgrade your plan to continue.
             </div>
           )}
-
           {!isOverLimit && isNearLimit && (
             <div className="p-3 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 text-sm rounded">
-              ⚠️ You’ve used {percentUsed.toFixed(1)}% of your daily token limit. Consider upgrading soon.
+              ⚠️ You've used {percentUsed.toFixed(1)}% of your daily token limit. Consider upgrading.
             </div>
           )}
 
@@ -198,9 +197,7 @@ const ChatTester = ({ faqs }) => {
           )}
 
           <div className="mt-4 space-y-2">
-            <div className="text-sm font-medium text-gray-600">
-              Token Usage: {tokensUsed} / {dailyLimit}
-            </div>
+            <div className="text-sm font-medium text-gray-600">Token Usage: {tokensUsed} / {dailyLimit}</div>
             <p className="text-xs italic text-gray-500">Plan: {tier}</p>
             <div className="w-full bg-gray-200 rounded-full h-3">
               <div
@@ -208,7 +205,6 @@ const ChatTester = ({ faqs }) => {
                 style={{ width: `${Math.min(percentUsed, 100)}%` }}
               />
             </div>
-
             {!isOverLimit && (
               <button
                 onClick={() => setShowPricing(true)}
@@ -228,7 +224,6 @@ const ChatTester = ({ faqs }) => {
               ❌
             </button>
             <h2 className="text-2xl font-semibold mb-4 text-indigo-700">Upgrade Your Plan</h2>
-
             <div className="space-y-4">
               <div className="border rounded p-4 hover:shadow-md">
                 <h3 className="text-lg font-bold">Pro Plan</h3>
@@ -238,7 +233,6 @@ const ChatTester = ({ faqs }) => {
                   Choose Plan
                 </button>
               </div>
-
               <div className="border rounded p-4 hover:shadow-md">
                 <h3 className="text-lg font-bold">Unlimited Plan</h3>
                 <p className="text-sm text-gray-600">Unlimited tokens/day</p>
