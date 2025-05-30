@@ -5,19 +5,20 @@ const PrivacyPolicy = () => (
     <div className="bg-white p-8 rounded shadow-lg max-w-3xl w-full space-y-4">
       <h1 className="text-3xl font-bold text-indigo-700">Privacy Policy</h1>
       <p className="text-gray-700">
-        We prioritize your privacy and ensure that your data is collected and processed responsibly. Our platform only collects essential data for service optimization and strictly adheres to data protection regulations.
+        At Botify, we prioritize your privacy and are committed to protecting your personal information. We collect and process only the essential data required to provide and enhance our AI-powered services.
       </p>
       <p className="text-gray-700">
-        Your information will never be sold or shared with unauthorized parties. Data usage is solely for enhancing service quality and providing essential features.
+        Your information will never be sold or shared with unauthorized parties. We use your data solely to deliver exceptional service, support, and functionality.
       </p>
       <p className="text-gray-700">
-        We comply with international data protection laws, including the General Data Protection Regulation (GDPR) for EU users and the California Consumer Privacy Act (CCPA) for California residents.
+        We strictly adhere to international data protection laws, including the General Data Protection Regulation (GDPR) for EU users and the California Consumer Privacy Act (CCPA) for residents of California.
       </p>
       <p className="text-gray-700">
-        You have the right to access, rectify, or delete your personal data at any time. To exercise these rights, please contact our Data Protection Officer at privacy@aichatbot.com.
+        You have the right to access, rectify, or delete your personal data at any time. To exercise these rights, please contact our Data Protection Officer at{" "}
+        <a href="mailto:botify.assist@gmail.com" className="text-indigo-600 underline">botify.assist@gmail.com</a>.
       </p>
       <p className="text-gray-700">
-        For more information on our data handling practices, refer to our Data Processing Agreement (DPA) available upon request.
+        For more details about our data handling practices, refer to our Data Processing Agreement (DPA) available upon request.
       </p>
     </div>
   </div>
