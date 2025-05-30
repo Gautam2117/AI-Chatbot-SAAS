@@ -33,7 +33,6 @@ const ChatTester = ({ faqs }) => {
           setTier(firestoreTier);
           setDailyLimit(firestoreTier === "pro" ? 5000 : firestoreTier === "unlimited" ? 999999 : 2000);
         } else {
-          // Create user doc if missing
           await setDoc(userRef, { email: user.email, role: "user", tier: "free" });
           setTier("free");
           setDailyLimit(2000);
@@ -47,7 +46,6 @@ const ChatTester = ({ faqs }) => {
           const lastReset = usageData.lastReset?.toDate().toDateString?.();
           setTokensUsed(lastReset === today ? usageData.tokensUsed : 0);
         } else {
-          // Create usage doc if missing
           await setDoc(usageRef, { tokensUsed: 0, lastReset: Timestamp.now() });
           setTokensUsed(0);
         }
@@ -146,6 +144,13 @@ const ChatTester = ({ faqs }) => {
 
   const percentUsed = (tokensUsed / dailyLimit) * 100;
   const isNearLimit = percentUsed >= 80;
+  const isOverLimit = tokensUsed >= dailyLimit;
+
+  useEffect(() => {
+    if (isNearLimit && !isOverLimit) {
+      setShowPricing(true);
+    }
+  }, [isNearLimit, isOverLimit]);
 
   return (
     <div className="bg-white rounded-xl shadow p-6 space-y-4">
@@ -155,9 +160,15 @@ const ChatTester = ({ faqs }) => {
         <p className="text-red-600">🔒 Please log in to use the chatbot.</p>
       ) : (
         <>
-          {isNearLimit && (
+          {isOverLimit && (
+            <div className="p-3 bg-red-100 border-l-4 border-red-500 text-red-800 text-sm rounded">
+              ❌ You've hit your daily token limit ({tokensUsed}/{dailyLimit}). Upgrade your plan to continue using the chatbot.
+            </div>
+          )}
+
+          {!isOverLimit && isNearLimit && (
             <div className="p-3 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 text-sm rounded">
-              ⚠️ You’ve used {percentUsed}% of your daily token limit. You may be blocked soon.
+              ⚠️ You’ve used {percentUsed.toFixed(1)}% of your daily token limit. Consider upgrading soon.
             </div>
           )}
 
@@ -168,11 +179,12 @@ const ChatTester = ({ faqs }) => {
               placeholder="Ask something..."
               value={userQ}
               onChange={(e) => setUserQ(e.target.value)}
+              disabled={isOverLimit}
             />
             <button
               onClick={testChat}
-              disabled={loading}
-              className="bg-pink-600 text-white px-5 py-2 rounded hover:bg-pink-700"
+              disabled={loading || isOverLimit}
+              className={`px-5 py-2 rounded ${isOverLimit ? "bg-gray-400 cursor-not-allowed" : "bg-pink-600 hover:bg-pink-700"} text-white`}
             >
               {loading ? "Thinking..." : "💬 Ask Bot"}
             </button>
@@ -192,17 +204,19 @@ const ChatTester = ({ faqs }) => {
             <p className="text-xs italic text-gray-500">Plan: {tier}</p>
             <div className="w-full bg-gray-200 rounded-full h-3">
               <div
-                className={`h-3 rounded-full transition-all duration-500 ${percentUsed >= 100 ? "bg-red-500" : "bg-green-500"}`}
-                style={{ width: `${percentUsed}%` }}
+                className={`h-3 rounded-full transition-all duration-500 ${percentUsed >= 100 ? "bg-red-500" : percentUsed >= 80 ? "bg-yellow-500" : "bg-green-500"}`}
+                style={{ width: `${Math.min(percentUsed, 100)}%` }}
               />
             </div>
 
-            <button
-              onClick={() => setShowPricing(true)}
-              className="mt-3 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition"
-            >
-              💳 Upgrade Plan
-            </button>
+            {!isOverLimit && (
+              <button
+                onClick={() => setShowPricing(true)}
+                className="mt-3 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition"
+              >
+                💳 Upgrade Plan
+              </button>
+            )}
           </div>
         </>
       )}

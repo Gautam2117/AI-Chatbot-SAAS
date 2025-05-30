@@ -63,16 +63,18 @@ export const MainContent = () => {
             <span className="text-gray-400">|</span>
             <Link to="/privacy-policy" className="hover:text-indigo-900 transition-colors">Privacy Policy</Link>
             <span className="text-gray-400">|</span>
-            <Link to="/terms" className="hover:text-indigo-900 transition-colors">Terms & Conditions</Link>
+            <Link to="/terms" className="hover:text-indigo-900 transition-colors">Terms</Link>
             <span className="text-gray-400">|</span>
-            <Link to="/refund-policy" className="hover:text-indigo-900 transition-colors">Refund Policy</Link>
+            <Link to="/refund-policy" className="hover:text-indigo-900 transition-colors">Refund</Link>
             <span className="text-gray-400">|</span>
-            <Link to="/cookie-policy" className="hover:text-indigo-900 transition-colors">Cookie Policy</Link>
+            <Link to="/shipping-policy" className="hover:text-indigo-900 transition-colors">Shipping</Link>
+            <span className="text-gray-400">|</span>
+            <Link to="/cookie-policy" className="hover:text-indigo-900 transition-colors">Cookies</Link>
             <span className="text-gray-400">|</span>
             <Link to="/disclaimer" className="hover:text-indigo-900 transition-colors">Disclaimer</Link>
           </nav>
           <p className="text-center text-xs text-gray-500 mt-4">
-            &copy; {new Date().getFullYear()} AI Chatbot SaaS. All rights reserved.
+            &copy; {new Date().getFullYear()} Botify. All rights reserved.
           </p>
         </footer>
       </div>
