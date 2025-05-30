@@ -114,9 +114,18 @@ const ChatTester = ({ faqs }) => {
             });
             setTier(plan);
             setShowPricing(false);
+            // Redirect to success page
+            navigate('/payment-success', { 
+              state: { 
+                plan, 
+                amount: `₹${amount}`, 
+                paymentId: response.razorpay_payment_id, 
+                orderId: response.razorpay_order_id 
+              } 
+            });
           } catch (err) {
-            alert("❌ Upgrade failed. Contact support.");
             console.error(err);
+            navigate('/payment-failure');
           }
         },
         prefill: {
