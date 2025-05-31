@@ -20,6 +20,11 @@ export const MainContent = () => {
 
   const isAdmin = role === "admin";
 
+  const handleCopy = () => {
+    navigator.clipboard.writeText(user.uid);
+    alert("✅ User ID copied to clipboard!");
+  };
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-indigo-100 via-white to-blue-100 flex items-start justify-center px-4 py-10">
       <div className="w-full max-w-3xl space-y-10 bg-white shadow-xl rounded-xl p-8">
@@ -33,6 +38,22 @@ export const MainContent = () => {
           >
             🔓 Logout
           </button>
+        </div>
+
+        {/* User ID Display with Copy Button */}
+        <div className="p-4 bg-green-50 border border-green-200 rounded">
+          <p className="text-sm text-green-700">
+            👤 <strong>Your User ID:</strong> <code>{user.uid}</code>
+          </p>
+          <button
+            onClick={handleCopy}
+            className="mt-2 text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700"
+          >
+            📋 Copy User ID
+          </button>
+          <p className="mt-2 text-xs text-green-800">
+            🔧 Use this User ID when configuring your chatbot. You can also customize responses, colors, and placement by editing your <code>&lt;script&gt;</code> tag's <code>data-user-id</code> attribute.
+          </p>
         </div>
 
         {isAdmin && (
