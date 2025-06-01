@@ -25,7 +25,7 @@ export const MainContent = () => {
     alert("✅ User ID copied to clipboard!");
   };
 
-  const scriptTag = `<script src="https://your-cdn.com/chatbot.js" data-user-id="${user.uid}" data-color="#4f46e5" data-position="bottom-right"></script>`;
+  const scriptTag = `<script src="https://ai-chatbot-saas-eight.vercel.app/chatbot.js" data-user-id="${user.uid}" data-color="#4f46e5" data-position="bottom-right"></script>`;
 
   const handleCopyScriptTag = () => {
     navigator.clipboard.writeText(scriptTag);
