@@ -1,27 +1,15 @@
 import React, { useEffect, useState, useContext } from "react";
 import { db } from "../firebase";
-import {
-  collection,
-  getDocs,
-  doc,
-  updateDoc,
-  Timestamp,
-} from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, Timestamp } from "firebase/firestore";
 import { AuthContext } from "../context/AuthProvider";
 import { useNavigate } from "react-router-dom";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { FaDownload, FaSearch, FaArrowLeft, FaArrowRight } from "react-icons/fa";
+import { MdOutlineFilterAlt } from "react-icons/md";
 
 export default function AdminDashboard() {
   const { user, role } = useContext(AuthContext);
@@ -73,10 +61,9 @@ export default function AdminDashboard() {
     let filtered = [...usageData];
 
     if (searchTerm) {
-      filtered = filtered.filter(
-        (u) =>
-          u.userId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          u.email.toLowerCase().includes(searchTerm.toLowerCase())
+      filtered = filtered.filter((u) =>
+        u.userId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        u.email.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -110,10 +97,7 @@ export default function AdminDashboard() {
 
   const resetTokens = async (userId) => {
     const usageRef = doc(db, "usage", userId);
-    await updateDoc(usageRef, {
-      tokensUsed: 0,
-      lastReset: Timestamp.now(),
-    });
+    await updateDoc(usageRef, { tokensUsed: 0, lastReset: Timestamp.now() });
     setUsageData((prev) =>
       prev.map((u) => (u.userId === userId ? { ...u, tokensUsed: 0 } : u))
     );
@@ -144,7 +128,6 @@ export default function AdminDashboard() {
     doc.text("📊 AI Chatbot Usage Report", 14, 20);
     doc.setFontSize(12);
     doc.text(`Exported on ${new Date().toDateString()}`, 14, 28);
-
     const tableColumn = ["User ID", "Email", "Tier", "Tokens Used", "Last Reset"];
     const tableRows = filteredData.map((u) => [
       u.userId,
@@ -153,7 +136,6 @@ export default function AdminDashboard() {
       u.tokensUsed,
       u.lastReset?.toDate?.().toDateString?.() || "N/A",
     ]);
-
     doc.autoTable({ head: [tableColumn], body: tableRows, startY: 35 });
     doc.save("user_usage_report.pdf");
   };
@@ -162,55 +144,63 @@ export default function AdminDashboard() {
   const totalPages = Math.ceil(filteredData.length / rowsPerPage);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white to-gray-100 p-6 md:p-10">
-      <h1 className="text-3xl font-bold text-indigo-700 mb-8 text-center drop-shadow-md">Admin Usage Analytics Dashboard</h1>
+    <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100 p-6 md:p-10">
+      <h1 className="text-4xl font-extrabold text-center text-indigo-700 drop-shadow-lg mb-8">
+        🚀 Botify Admin Analytics Dashboard
+      </h1>
 
       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <input
-          type="text"
-          placeholder="Search by email or UID"
-          className="px-4 py-2 border rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
+        <div className="relative">
+          <FaSearch className="absolute left-3 top-3 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search by email or UID"
+            className="pl-10 pr-4 py-2 border rounded-full shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
         <DatePicker
           selected={startDate}
           onChange={(date) => setStartDate(date)}
           placeholderText="Start Date"
-          className="px-4 py-2 border rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+          className="px-4 py-2 border rounded-full shadow-sm focus:ring-2 focus:ring-indigo-400"
         />
         <DatePicker
           selected={endDate}
           onChange={(date) => setEndDate(date)}
           placeholderText="End Date"
-          className="px-4 py-2 border rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+          className="px-4 py-2 border rounded-full shadow-sm focus:ring-2 focus:ring-indigo-400"
         />
-        <label className="flex items-center justify-start gap-2">
-          <input type="checkbox" checked={onlyPaid} onChange={(e) => setOnlyPaid(e.target.checked)} />
-          <span className="text-sm">Only Paid Users</span>
+        <label className="flex items-center gap-2">
+          <MdOutlineFilterAlt className="text-indigo-500 text-xl" />
+          <input
+            type="checkbox"
+            checked={onlyPaid}
+            onChange={(e) => setOnlyPaid(e.target.checked)}
+          />
+          <span className="text-sm font-medium text-gray-700">Only Paid Users</span>
         </label>
       </div>
 
       <div className="flex flex-wrap gap-3 justify-end mb-6">
-        <button
-          onClick={exportCSV}
-          className="bg-green-600 text-white px-5 py-2 rounded hover:bg-green-700 transition"
-        >⬇️ CSV</button>
-        <button
-          onClick={exportPDF}
-          className="bg-blue-600 text-white px-5 py-2 rounded hover:bg-blue-700 transition"
-        >📄 PDF</button>
+        <button onClick={exportCSV} className="flex items-center gap-2 bg-green-600 text-white px-5 py-2 rounded-full hover:bg-green-700 transition">
+          <FaDownload /> CSV
+        </button>
+        <button onClick={exportPDF} className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2 rounded-full hover:bg-blue-700 transition">
+          <FaDownload /> PDF
+        </button>
       </div>
 
-      <div className="bg-white p-4 rounded-lg shadow mb-10">
-        <h2 className="text-lg font-semibold mb-4 text-indigo-700">📊 Token Usage Distribution</h2>
+      <div className="bg-white p-4 rounded-lg shadow-xl mb-10">
+        <h2 className="text-lg font-bold mb-4 text-indigo-700">📊 Token Usage Distribution</h2>
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={filteredData} margin={{ top: 10, right: 30, left: 0, bottom: 10 }}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="email" interval={0} angle={-25} textAnchor="end" height={100} />
             <YAxis />
             <Tooltip />
-            <Bar dataKey="tokensUsed" fill="#4F46E5" />
+            <Bar dataKey="tokensUsed" fill="#7C3AED" />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -236,7 +226,7 @@ export default function AdminDashboard() {
                   <select
                     value={u.tier}
                     onChange={(e) => updateTier(u.userId, e.target.value)}
-                    className="border rounded px-2 py-1 focus:ring-1"
+                    className="border rounded-full px-2 py-1 focus:ring-1 focus:ring-indigo-400"
                   >
                     <option value="free">Free</option>
                     <option value="pro">Pro</option>
@@ -248,7 +238,7 @@ export default function AdminDashboard() {
                 <td className="px-4 py-2">
                   <button
                     onClick={() => resetTokens(u.userId)}
-                    className="text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600 transition"
+                    className="text-xs bg-red-500 text-white px-2 py-1 rounded-full hover:bg-red-600 transition"
                   >Reset</button>
                 </td>
               </tr>
@@ -260,14 +250,14 @@ export default function AdminDashboard() {
           <button
             disabled={page === 1}
             onClick={() => setPage((p) => p - 1)}
-            className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50"
-          >◀ Prev</button>
+            className="flex items-center gap-2 px-4 py-2 bg-gray-200 rounded-full hover:bg-gray-300 disabled:opacity-50"
+          ><FaArrowLeft /> Prev</button>
           <span className="text-sm text-gray-600">Page {page} of {totalPages}</span>
           <button
             disabled={page === totalPages}
             onClick={() => setPage((p) => p + 1)}
-            className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50"
-          >Next ▶</button>
+            className="flex items-center gap-2 px-4 py-2 bg-gray-200 rounded-full hover:bg-gray-300 disabled:opacity-50"
+          >Next <FaArrowRight /></button>
         </div>
       </div>
     </div>

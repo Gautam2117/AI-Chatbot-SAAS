@@ -2,6 +2,7 @@ import { auth } from "../firebase";
 import { GoogleAuthProvider, signInWithEmailAndPassword, signInWithPopup } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { FcGoogle } from "react-icons/fc"; // Google Icon
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -27,29 +28,47 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-blue-50 p-4">
-      <div className="bg-white shadow-xl rounded-xl p-8 max-w-md w-full space-y-4">
-        <h2 className="text-xl font-bold text-center text-blue-700">Login</h2>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 p-4">
+      <div className="bg-white shadow-2xl rounded-2xl p-10 max-w-md w-full space-y-6 transform transition-all duration-500 hover:scale-105">
+        <h2 className="text-3xl font-extrabold text-center text-purple-700 drop-shadow-lg">Welcome Back!</h2>
+        <p className="text-center text-gray-500 mb-4">Please sign in to continue</p>
+        
         <input
-          className="border px-4 py-2 w-full rounded"
-          placeholder="Email"
+          className="border-2 border-gray-200 px-4 py-3 w-full rounded-lg focus:ring-2 focus:ring-purple-400 focus:outline-none transition duration-300"
+          placeholder="📧 Email"
           onChange={(e) => setEmail(e.target.value)}
         />
         <input
-          className="border px-4 py-2 w-full rounded"
+          className="border-2 border-gray-200 px-4 py-3 w-full rounded-lg focus:ring-2 focus:ring-purple-400 focus:outline-none transition duration-300"
           type="password"
-          placeholder="Password"
+          placeholder="🔒 Password"
           onChange={(e) => setPass(e.target.value)}
         />
-        <button className="bg-blue-600 text-white px-4 py-2 rounded w-full" onClick={loginWithEmail}>
+        
+        <button
+          className="bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold px-4 py-3 rounded-lg w-full shadow-md hover:from-purple-700 hover:to-pink-700 transition duration-300"
+          onClick={loginWithEmail}
+        >
           Sign In
         </button>
-        <button className="bg-red-500 text-white px-4 py-2 rounded w-full" onClick={loginWithGoogle}>
-          Sign In with Google
+
+        <div className="flex items-center justify-center gap-2">
+          <span className="h-px w-24 bg-gray-300"></span>
+          <span className="text-gray-500">or</span>
+          <span className="h-px w-24 bg-gray-300"></span>
+        </div>
+
+        <button
+          className="flex items-center justify-center gap-3 bg-white border border-gray-300 px-4 py-3 rounded-lg w-full hover:shadow-lg transition duration-300"
+          onClick={loginWithGoogle}
+        >
+          <FcGoogle className="text-2xl" />
+          <span className="font-medium text-gray-700">Sign In with Google</span>
         </button>
-        <p className="text-sm text-center mt-4">
+
+        <p className="text-sm text-center mt-4 text-gray-600">
           Don't have an account?{" "}
-          <a href="/signup" className="text-blue-600 underline">
+          <a href="/signup" className="text-purple-600 font-medium hover:underline">
             Sign up
           </a>
         </p>

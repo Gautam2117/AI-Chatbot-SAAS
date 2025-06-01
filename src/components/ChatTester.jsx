@@ -11,6 +11,9 @@ import {
   onSnapshot,
 } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { TypeAnimation } from "react-type-animation";
 
 const ChatTester = () => {
   const { user } = useContext(AuthContext);
@@ -35,11 +38,10 @@ const ChatTester = () => {
     const usageRef = doc(db, "usage", user.uid);
     const faqCollection = collection(db, "faqs", user.uid, "list");
 
-    // Fetch user's tier and set limits
     const fetchTier = async () => {
       try {
         const userSnap = await getDoc(userRef);
-        if (userSnap.exists) {
+        if (userSnap.exists()) {
           const data = userSnap.data();
           const userTier = data.tier || "free";
           setTier(userTier);
@@ -62,7 +64,6 @@ const ChatTester = () => {
 
     fetchTier();
 
-    // 🔥 Real-time usage tracking
     const unsubscribeUsage = onSnapshot(
       usageRef,
       (snapshot) => {
@@ -81,7 +82,6 @@ const ChatTester = () => {
       }
     );
 
-    // 🔥 Real-time FAQs listener
     const unsubscribeFAQ = onSnapshot(
       faqCollection,
       (snapshot) => {
@@ -119,10 +119,22 @@ const ChatTester = () => {
           headers: { "x-user-id": user.uid },
         }
       );
+
       setBotAnswer(res.data.reply);
-      setTokensUsed(res.data.tokensUsed);
-      setDailyLimit(res.data.dailyLimit);
-      setTier(res.data.tier || "free");
+      setDailyLimit(res.data.dailyLimit); // optional, backend override
+      setTier(res.data.tier || "free");   // optional, backend override
+
+      // 🔥 Update Firestore usage doc with new data
+      await setDoc(
+        doc(db, "usage", user.uid),
+        {
+          tokensUsed: res.data.tokensUsed, // total tokens used today
+          lastReset: Timestamp.now(),
+        },
+        { merge: true }
+      );
+
+      // ❌ Removed setTokensUsed(res.data.tokensUsed) to avoid UI conflicts
     } catch (err) {
       setBotAnswer(err.response?.data?.error || "❌ Error getting response.");
     } finally {
@@ -200,16 +212,15 @@ const ChatTester = () => {
   }, [isNearLimit, isOverLimit]);
 
   return (
-    <div className="bg-white rounded-xl shadow p-6 space-y-4">
-      <h2 className="text-xl font-semibold text-pink-600">🤖 Test Chatbot</h2>
+    <div className="bg-gradient-to-br from-white via-blue-50 to-indigo-100 rounded-3xl shadow-2xl p-6 md:p-10 space-y-6 hover:scale-[1.02] transition">
+      <h2 className="text-3xl font-extrabold text-indigo-700 text-center">🤖 Test Chatbot</h2>
       {!user?.uid ? (
-        <p className="text-red-600">🔒 Please log in to use the chatbot.</p>
+        <p className="text-red-600 text-center">🔒 Please log in to use the chatbot.</p>
       ) : (
         <>
           {isOverLimit && (
             <div className="p-3 bg-red-100 border-l-4 border-red-500 text-red-800 text-sm rounded">
-              ❌ Token limit reached ({tokensUsed}/{dailyLimit}). Upgrade plan
-              to continue.
+              ❌ Token limit reached ({tokensUsed}/{dailyLimit}). Upgrade plan to continue.
             </div>
           )}
           {!isOverLimit && isNearLimit && (
@@ -217,10 +228,10 @@ const ChatTester = () => {
               ⚠️ You've used {percentUsed.toFixed(1)}% of your token limit.
             </div>
           )}
-          <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
             <input
               type="text"
-              className="border px-4 py-2 rounded w-full focus:ring-2 focus:ring-pink-300"
+              className="w-full md:w-2/3 border px-4 py-2 rounded-lg focus:ring-2 focus:ring-indigo-400"
               placeholder="Ask something..."
               value={userQ}
               onChange={(e) => setUserQ(e.target.value)}
@@ -229,42 +240,58 @@ const ChatTester = () => {
             <button
               onClick={testChat}
               disabled={loading || isOverLimit}
-              className={`px-5 py-2 rounded ${
+              className={`px-5 py-2 rounded-lg text-white transition ${
                 isOverLimit
                   ? "bg-gray-400 cursor-not-allowed"
-                  : "bg-pink-600 hover:bg-pink-700"
-              } text-white`}
+                  : "bg-indigo-600 hover:bg-indigo-700"
+              }`}
             >
               {loading ? "Thinking..." : "💬 Ask Bot"}
             </button>
           </div>
-          {botAnswer && (
-            <div className="p-4 bg-pink-50 border border-pink-200 rounded text-gray-800">
-              <strong className="text-pink-800">Bot:</strong>
-              <p className="mt-1 whitespace-pre-wrap">{botAnswer}</p>
+          {loading && (
+            <div className="mt-4 text-center text-indigo-600">
+              <TypeAnimation
+                sequence={["🤖 Typing...", 1000]}
+                wrapper="span"
+                speed={50}
+                style={{ fontSize: '1.25rem', display: 'inline-block' }}
+                repeat={Infinity}
+              />
             </div>
           )}
-          <div className="mt-4 space-y-2">
-            <div className="text-sm font-medium text-gray-600">
-              Token Usage: {tokensUsed} / {dailyLimit}
+          {botAnswer && (
+            <div className="p-4 bg-white border border-indigo-200 rounded-lg shadow mt-4">
+              <strong className="text-indigo-800">Bot:</strong>
+              <div className="prose prose-indigo mt-2">
+                <ReactMarkdown
+                  children={botAnswer}
+                  remarkPlugins={[remarkGfm]}
+                />
+              </div>
             </div>
-            <p className="text-xs italic text-gray-500">Plan: {tier}</p>
-            <div className="w-full bg-gray-200 rounded-full h-3">
+          )}
+          <div className="mt-6 space-y-2">
+            <div className="text-sm font-medium text-gray-600">
+              🔋 Token Usage: {tokensUsed} / {dailyLimit}
+            </div>
+            <div className="relative w-full h-4 bg-gray-200 rounded-full overflow-hidden">
               <div
-                className={`h-3 rounded-full transition-all duration-500 ${
+                className={`h-full transition-all duration-700 ease-in-out ${
                   percentUsed >= 100
                     ? "bg-red-500"
                     : percentUsed >= 80
-                    ? "bg-yellow-500"
+                    ? "bg-yellow-400"
                     : "bg-green-500"
                 }`}
                 style={{ width: `${Math.min(percentUsed, 100)}%` }}
-              />
+              ></div>
             </div>
+            <div className="text-xs italic text-gray-500">Plan: {tier}</div>
             {!isOverLimit && (
               <button
                 onClick={() => setShowPricing(true)}
-                className="mt-3 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition"
+                className="mt-3 bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-4 py-2 rounded hover:from-purple-600 hover:to-indigo-700 transition"
               >
                 💳 Upgrade Plan
               </button>
@@ -274,36 +301,36 @@ const ChatTester = () => {
       )}
 
       {showPricing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-white rounded-lg w-[90%] max-w-md p-6 shadow-xl relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md relative animate-fadeIn">
             <button
               onClick={() => setShowPricing(false)}
-              className="absolute top-2 right-3 text-gray-500 hover:text-black"
+              className="absolute top-3 right-3 text-gray-500 hover:text-gray-900 text-lg"
             >
-              ❌
+              ✖
             </button>
-            <h2 className="text-2xl font-semibold mb-4 text-indigo-700">
-              Upgrade Your Plan
+            <h2 className="text-2xl font-bold text-center text-indigo-700 mb-6">
+              🚀 Upgrade Your Plan
             </h2>
             <div className="space-y-4">
-              <div className="border rounded p-4 hover:shadow-md">
-                <h3 className="text-lg font-bold">Pro Plan</h3>
-                <p className="text-sm text-gray-600">Get 5,000 tokens/day</p>
-                <p className="text-indigo-600 font-semibold">₹99/month</p>
+              <div className="border border-indigo-300 rounded-lg p-4 hover:shadow-xl">
+                <h3 className="text-lg font-semibold text-indigo-600">Pro Plan</h3>
+                <p className="text-sm text-gray-600">📈 5,000 tokens/day</p>
+                <p className="text-indigo-700 font-bold mt-1">₹99/month</p>
                 <button
                   onClick={() => handleCheckout("pro")}
-                  className="mt-2 bg-indigo-600 text-white px-3 py-1 rounded"
+                  className="mt-2 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition"
                 >
                   Choose Plan
                 </button>
               </div>
-              <div className="border rounded p-4 hover:shadow-md">
-                <h3 className="text-lg font-bold">Unlimited Plan</h3>
-                <p className="text-sm text-gray-600">Unlimited tokens/day</p>
-                <p className="text-indigo-600 font-semibold">₹249/month</p>
+              <div className="border border-indigo-300 rounded-lg p-4 hover:shadow-xl">
+                <h3 className="text-lg font-semibold text-indigo-600">Unlimited Plan</h3>
+                <p className="text-sm text-gray-600">🌟 Unlimited tokens/day</p>
+                <p className="text-indigo-700 font-bold mt-1">₹249/month</p>
                 <button
                   onClick={() => handleCheckout("unlimited")}
-                  className="mt-2 bg-indigo-600 text-white px-3 py-1 rounded"
+                  className="mt-2 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition"
                 >
                   Choose Plan
                 </button>

@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
-import { MainContent } from './App';
+import App, { MainContent } from './App';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import AdminDashboard from "./pages/AdminDashboard";
@@ -11,7 +11,7 @@ import Pricing from './pages/Pricing';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import Terms from './pages/Terms';
 import RefundPolicy from './pages/RefundPolicy';
-import ShippingPolicy from './pages/ShippingPolicy'; // New page
+import ShippingPolicy from './pages/ShippingPolicy';
 import CookiePolicy from './pages/CookiePolicy';
 import Disclaimer from './pages/Disclaimer';
 import PaymentSuccess from './pages/PaymentSuccess';

@@ -6,7 +6,7 @@ import { AuthContext } from "./context/AuthProvider";
 import { signOut } from "firebase/auth";
 import { auth } from "./firebase";
 
-export const MainContent = () => {
+export function MainContent () {
   const [faqs, setFaqs] = useState([]);
   const { user, role, loading } = useContext(AuthContext);
   const navigate = useNavigate();
@@ -15,7 +15,13 @@ export const MainContent = () => {
     if (!user) navigate("/login");
   }, [user, navigate]);
 
-  if (loading) return <div>Loading...</div>;
+  if (loading)
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-500 via-pink-500 to-red-500">
+        <div className="animate-spin rounded-full h-32 w-32 border-t-4 border-white border-solid"></div>
+      </div>
+    );
+
   if (!user) return <Navigate to="/login" replace />;
 
   const isAdmin = role === "admin";
@@ -33,67 +39,63 @@ export const MainContent = () => {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-indigo-100 via-white to-blue-100 flex items-start justify-center px-4 py-10">
-      <div className="w-full max-w-3xl space-y-10 bg-white shadow-xl rounded-xl p-8">
+    <main className="min-h-screen bg-gradient-to-br from-purple-100 via-pink-100 to-red-100 flex items-start justify-center px-4 py-10">
+      <div className="w-full max-w-3xl space-y-10 bg-white shadow-2xl rounded-3xl p-10 transition-all duration-500 hover:scale-[1.02]">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-extrabold text-indigo-700 drop-shadow">
-            💬 AI Chatbot Admin Dashboard
-          </h1>
+          <h1 className="text-3xl font-extrabold text-purple-700 drop-shadow-lg">💬 Botify Admin Dashboard</h1>
           <button
-            className="text-sm bg-red-100 text-red-600 px-3 py-1 rounded hover:bg-red-200 transition"
+            className="text-sm bg-gradient-to-r from-red-500 to-pink-500 text-white px-4 py-2 rounded-lg hover:from-red-600 hover:to-pink-600 transition"
             onClick={() => signOut(auth)}
           >
             🔓 Logout
           </button>
         </div>
 
-        {/* User ID Display with Copy Button */}
-        <div className="p-4 bg-green-50 border border-green-200 rounded">
-          <p className="text-sm text-green-700">
+        {/* User ID Display */}
+        <div className="p-4 bg-gradient-to-r from-green-100 to-green-200 border-l-4 border-green-500 rounded-lg">
+          <p className="text-sm text-green-800">
             👤 <strong>Your User ID:</strong> <code>{user.uid}</code>
           </p>
           <button
             onClick={handleCopyUserId}
-            className="mt-2 text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700"
+            className="mt-2 text-xs bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition"
           >
             📋 Copy User ID
           </button>
-          <p className="mt-2 text-xs text-green-800">
-            🔧 Use this User ID when configuring your chatbot. You can also customize responses, colors, and placement by editing your <code>&lt;script&gt;</code> tag's <code>data-user-id</code> attribute.
+          <p className="mt-2 text-xs text-green-700">
+            🔧 Use this User ID for chatbot configuration. Customize colors and placement with <code>&lt;script&gt;</code> tag attributes.
           </p>
         </div>
 
-        {/* Chatbot Script Tag Generator */}
-        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">
+        {/* Chatbot Script */}
+        <div className="p-4 bg-gradient-to-r from-yellow-100 to-yellow-200 border-l-4 border-yellow-500 rounded-lg">
           <h3 className="font-semibold text-yellow-700">🔌 Embed Chatbot Script</h3>
           <p className="text-sm text-yellow-800">
-            Copy the following <code>&lt;script&gt;</code> tag and paste it into your website's <code>&lt;body&gt;</code>. Customize attributes as needed:
+            Copy and paste this <code>&lt;script&gt;</code> into your website's <code>&lt;body&gt;</code> tag. Customize as needed:
           </p>
           <pre className="bg-gray-100 p-2 rounded text-xs overflow-x-auto">{scriptTag}</pre>
           <button
             onClick={handleCopyScriptTag}
-            className="mt-2 text-xs bg-yellow-600 text-white px-2 py-1 rounded hover:bg-yellow-700"
+            className="mt-2 text-xs bg-yellow-600 text-white px-3 py-1 rounded hover:bg-yellow-700 transition"
           >
             📋 Copy Script Tag
           </button>
           <p className="text-xs text-yellow-800 mt-2">
             🛠️ <strong>Customizable Attributes:</strong><br/>
-            • <code>data-user-id</code>: Your unique user ID.<br/>
-            • <code>data-color</code>: Hex color for chatbot theme.<br/>
-            • <code>data-position</code>: Position of chatbot (e.g., "bottom-right", "bottom-left").<br/>
-            • You can add <code>data-welcome-message</code> or <code>data-faq-category</code> for personalization.
+            • <code>data-user-id</code>: Unique user ID.<br/>
+            • <code>data-color</code>: Chatbot theme color.<br/>
+            • <code>data-position</code>: Chatbot position (e.g., bottom-right).<br/>
+            • <code>data-welcome-message</code> or <code>data-faq-category</code> for personalization.
           </p>
         </div>
 
         {isAdmin && (
-          <div className="p-4 bg-indigo-50 border border-indigo-200 rounded space-y-2">
+          <div className="p-4 bg-indigo-100 border-l-4 border-indigo-500 rounded-lg">
             <h2 className="font-semibold text-indigo-700">🔧 Admin Panel</h2>
-            <p className="text-sm text-gray-700">
-              Welcome, Admin! You have elevated access.
-            </p>
+            <p className="text-sm text-gray-700">Welcome, Admin! You have elevated access.</p>
             <a
               href="/admin"
-              className="inline-block text-sm text-indigo-600 underline hover:text-indigo-800"
+              className="inline-block text-sm text-indigo-600 underline hover:text-indigo-800 transition"
             >
               Go to Admin Dashboard →
             </a>
@@ -132,6 +134,4 @@ export const MainContent = () => {
   );
 };
 
-export default function App() {
-  return <MainContent />;
-}
+export default MainContent;
