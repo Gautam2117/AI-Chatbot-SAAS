@@ -1,7 +1,10 @@
+// src/context/AuthProvider.js
 import { createContext, useEffect, useState } from "react";
 import { auth, db } from "../firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
+import Lottie from "react-lottie-player";
+import loaderAnimation from "../assets/loader.json";  // Path to your Lottie JSON
 
 export const AuthContext = createContext();
 
@@ -21,16 +24,15 @@ export const AuthProvider = ({ children }) => {
         if (userSnap.exists()) {
           setRole(userSnap.data().role || "user");
         } else {
-          // Create user doc with default role
           await setDoc(userRef, {
             email: firebaseUser.email,
             role: "user",
             tier: "free",
           });
           setRole("user");
+          console.log(`✅ User doc created for ${firebaseUser.uid}`);
         }
 
-        // ✅ Also check or create usage doc
         const usageRef = doc(db, "usage", firebaseUser.uid);
         const usageSnap = await getDoc(usageRef);
         if (!usageSnap.exists()) {
@@ -50,7 +52,18 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={{ user, role, loading }}>
-      {!loading ? children : <div>Loading Auth...</div>}
+      {!loading ? (
+        children
+      ) : (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-r from-purple-500 via-pink-500 to-red-500">
+          <Lottie
+            loop
+            animationData={loaderAnimation}
+            play
+            style={{ width: 200, height: 200 }}
+          />
+        </div>
+      )}
     </AuthContext.Provider>
   );
 };

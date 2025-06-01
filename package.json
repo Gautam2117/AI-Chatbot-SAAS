@@ -14,10 +14,12 @@
     "firebase": "^11.7.3",
     "jspdf": "^3.0.1",
     "jspdf-autotable": "^5.0.2",
+    "lottie-web": "^5.13.0",
     "react": "^19.1.0",
     "react-confetti": "^6.4.0",
     "react-datepicker": "^8.3.0",
     "react-dom": "^19.1.0",
+    "react-lottie-player": "^2.1.0",
     "react-router-dom": "^6.30.0",
     "recharts": "^2.15.3"
   },

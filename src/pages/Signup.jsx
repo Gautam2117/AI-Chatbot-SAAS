@@ -1,5 +1,6 @@
-import { auth } from "../firebase";
+import { auth, db } from "../firebase";
 import { createUserWithEmailAndPassword } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -10,7 +11,18 @@ export default function Signup() {
 
   const signup = async () => {
     try {
-      await createUserWithEmailAndPassword(auth, email, pass);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+      const user = userCredential.user;
+
+      // ✅ Save email & UID to Firestore
+      const userRef = doc(db, "users", user.uid);
+      await setDoc(userRef, {
+        email: user.email,
+        role: "user",
+        tier: "free",
+      });
+      console.log(`✅ User created: ${user.uid}`);
+
       navigate("/");
     } catch (e) {
       alert(e.message);
@@ -32,7 +44,10 @@ export default function Signup() {
           placeholder="Password"
           onChange={(e) => setPass(e.target.value)}
         />
-        <button className="bg-blue-600 text-white px-4 py-2 rounded w-full" onClick={signup}>
+        <button
+          className="bg-blue-600 text-white px-4 py-2 rounded w-full"
+          onClick={signup}
+        >
           Sign Up
         </button>
         <p className="text-sm text-center mt-4">

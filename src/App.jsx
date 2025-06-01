@@ -20,9 +20,16 @@ export const MainContent = () => {
 
   const isAdmin = role === "admin";
 
-  const handleCopy = () => {
+  const handleCopyUserId = () => {
     navigator.clipboard.writeText(user.uid);
     alert("✅ User ID copied to clipboard!");
+  };
+
+  const scriptTag = `<script src="https://your-cdn.com/chatbot.js" data-user-id="${user.uid}" data-color="#4f46e5" data-position="bottom-right"></script>`;
+
+  const handleCopyScriptTag = () => {
+    navigator.clipboard.writeText(scriptTag);
+    alert("✅ Chatbot embed script copied! Paste it into your website's <body> tag.");
   };
 
   return (
@@ -46,13 +53,35 @@ export const MainContent = () => {
             👤 <strong>Your User ID:</strong> <code>{user.uid}</code>
           </p>
           <button
-            onClick={handleCopy}
+            onClick={handleCopyUserId}
             className="mt-2 text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700"
           >
             📋 Copy User ID
           </button>
           <p className="mt-2 text-xs text-green-800">
             🔧 Use this User ID when configuring your chatbot. You can also customize responses, colors, and placement by editing your <code>&lt;script&gt;</code> tag's <code>data-user-id</code> attribute.
+          </p>
+        </div>
+
+        {/* Chatbot Script Tag Generator */}
+        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">
+          <h3 className="font-semibold text-yellow-700">🔌 Embed Chatbot Script</h3>
+          <p className="text-sm text-yellow-800">
+            Copy the following <code>&lt;script&gt;</code> tag and paste it into your website's <code>&lt;body&gt;</code>. Customize attributes as needed:
+          </p>
+          <pre className="bg-gray-100 p-2 rounded text-xs overflow-x-auto">{scriptTag}</pre>
+          <button
+            onClick={handleCopyScriptTag}
+            className="mt-2 text-xs bg-yellow-600 text-white px-2 py-1 rounded hover:bg-yellow-700"
+          >
+            📋 Copy Script Tag
+          </button>
+          <p className="text-xs text-yellow-800 mt-2">
+            🛠️ <strong>Customizable Attributes:</strong><br/>
+            • <code>data-user-id</code>: Your unique user ID.<br/>
+            • <code>data-color</code>: Hex color for chatbot theme.<br/>
+            • <code>data-position</code>: Position of chatbot (e.g., "bottom-right", "bottom-left").<br/>
+            • You can add <code>data-welcome-message</code> or <code>data-faq-category</code> for personalization.
           </p>
         </div>
 
