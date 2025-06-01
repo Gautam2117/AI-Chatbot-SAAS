@@ -55,7 +55,7 @@ export const AuthProvider = ({ children }) => {
       {!loading ? (
         children
       ) : (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-r from-purple-500 via-pink-500 to-red-500">
+        <div className="min-h-screen flex flex-col items-center justify-center">
           <Lottie
             loop
             animationData={loaderAnimation}
