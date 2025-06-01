@@ -31,10 +31,13 @@ const ChatTester = () => {
   useEffect(() => {
     if (!user?.uid) return;
 
-    const fetchUserData = async () => {
+    const userRef = doc(db, "users", user.uid);
+    const usageRef = doc(db, "usage", user.uid);
+    const faqCollection = collection(db, "faqs", user.uid, "list");
+
+    // Fetch user's tier and set limits
+    const fetchTier = async () => {
       try {
-        // Fetch user tier and usage
-        const userRef = doc(db, "users", user.uid);
         const userSnap = await getDoc(userRef);
         if (userSnap.exists) {
           const data = userSnap.data();
@@ -52,31 +55,34 @@ const ChatTester = () => {
           setTier("free");
           setDailyLimit(2000);
         }
-
-        const usageRef = doc(db, "usage", user.uid);
-        const usageSnap = await getDoc(usageRef);
-        if (usageSnap.exists) {
-          const usageData = usageSnap.data();
-          const today = new Date().toDateString();
-          const lastReset = usageData.lastReset?.toDate().toDateString?.();
-          setTokensUsed(lastReset === today ? usageData.tokensUsed : 0);
-        } else {
-          await setDoc(usageRef, {
-            tokensUsed: 0,
-            lastReset: Timestamp.now(),
-          });
-          setTokensUsed(0);
-        }
       } catch (err) {
-        console.error("❌ Error fetching user data:", err.message);
+        console.error("❌ Error fetching tier:", err.message);
       }
     };
 
-    fetchUserData();
+    fetchTier();
+
+    // 🔥 Real-time usage tracking
+    const unsubscribeUsage = onSnapshot(
+      usageRef,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          const today = new Date().toDateString();
+          const lastReset = data.lastReset?.toDate().toDateString?.();
+          setTokensUsed(lastReset === today ? data.tokensUsed : 0);
+        } else {
+          setDoc(usageRef, { tokensUsed: 0, lastReset: Timestamp.now() });
+          setTokensUsed(0);
+        }
+      },
+      (error) => {
+        console.error("❌ Error with usage snapshot:", error.message);
+      }
+    );
 
     // 🔥 Real-time FAQs listener
-    const faqCollection = collection(db, "faqs", user.uid, "list");
-    const unsubscribe = onSnapshot(
+    const unsubscribeFAQ = onSnapshot(
       faqCollection,
       (snapshot) => {
         const updatedFaqs = snapshot.docs.map((doc) => doc.data());
@@ -88,7 +94,10 @@ const ChatTester = () => {
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeUsage();
+      unsubscribeFAQ();
+    };
   }, [user]);
 
   const testChat = async () => {
