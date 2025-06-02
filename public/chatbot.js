@@ -3,47 +3,63 @@
   const userId = scriptTag.getAttribute('data-user-id') || 'guest-user';
   const primaryColor = scriptTag.getAttribute('data-color') || '#4f46e5';
   const fontFamily = scriptTag.getAttribute('data-font') || 'Inter, sans-serif';
-  const borderRadius = scriptTag.getAttribute('data-border-radius') || '20px';
+  const borderRadius = scriptTag.getAttribute('data-border-radius') || '24px';
   const position = scriptTag.getAttribute('data-position') || 'bottom-right';
   const icon = scriptTag.getAttribute('data-icon') || '💬';
-  const initialTheme = scriptTag.getAttribute('data-theme') || 'light';
-  const initialLang = scriptTag.getAttribute('data-lang') || 'en';
+  const initialTheme = scriptTag.getAttribute('data-theme') || 'gradient';
+  const brandName = scriptTag.getAttribute('data-brand') || 'Botify';
   const BASE_URL = 'https://ai-chatbot-backend-h669.onrender.com';
-
-  const positionStyles = position === 'bottom-left' ? 'bottom: 24px; left: 24px;' : 'bottom: 24px; right: 24px;';
-  let currentTheme = initialTheme, currentLang = initialLang;
+  const positionStyles = position === 'bottom-left' ? 'bottom: 20px; left: 20px;' : 'bottom: 20px; right: 20px;';
+  let currentTheme = initialTheme;
+  let currentLang = 'en';
 
   const translations = {
-    en: { assistant: 'Botify Assistant', send: 'Send', typeMessage: 'Type your message...', theme: { light: '🌙', dark: '☀️' }, selectLang: '🌐', typing: 'Bot is typing...', error: 'Connection error.' },
-    hi: { assistant: 'बॉटिफाई सहायक', send: 'भेजें', typeMessage: 'अपना संदेश लिखें...', theme: { light: '🌙', dark: '☀️' }, selectLang: '🌐', typing: 'बॉट टाइप कर रहा है...', error: 'सर्वर त्रुटि।' },
-    zh: { assistant: 'Botify 助手', send: '发送', typeMessage: '输入您的消息...', theme: { light: '🌙', dark: '☀️' }, selectLang: '🌐', typing: '机器人正在输入...', error: '连接错误。' },
-    ar: { assistant: 'مساعد Botify', send: 'إرسال', typeMessage: 'اكتب رسالتك...', theme: { light: '🌙', dark: '☀️' }, selectLang: '🌐', typing: 'البوت يكتب...', error: 'خطأ في الاتصال.' },
-    pt: { assistant: 'Assistente Botify', send: 'Enviar', typeMessage: 'Digite sua mensagem...', theme: { light: '🌙', dark: '☀️' }, selectLang: '🌐', typing: 'O bot está digitando...', error: 'Erro de conexão.' },
-    bn: { assistant: 'Botify সহায়ক', send: 'পাঠান', typeMessage: 'আপনার বার্তা লিখুন...', theme: { light: '🌙', dark: '☀️' }, selectLang: '🌐', typing: 'বট টাইপ করছে...', error: 'সংযোগ ত্রুটি।' },
-    es: { assistant: 'Asistente Botify', send: 'Enviar', typeMessage: 'Escribe tu mensaje...', theme: { light: '🌙', dark: '☀️' }, selectLang: '🌐', typing: 'El bot está escribiendo...', error: 'Error de conexión.' },
-    fr: { assistant: 'Assistant Botify', send: 'Envoyer', typeMessage: 'Tapez votre message...', theme: { light: '🌙', dark: '☀️' }, selectLang: '🌐', typing: 'Le bot est en train d\'écrire...', error: 'Erreur de connexion.' }
+    en: { welcome: 'Hello! How can I assist you today?', send: 'Send', typing: `${brandName} is typing...`, mic: '🎤', placeholder: 'Type a message... 😊' },
+    hi: { welcome: 'नमस्ते! मैं आपकी कैसे मदद कर सकता हूँ?', send: 'भेजें', typing: `${brandName} लिख रहा है...`, mic: '🎤', placeholder: 'संदेश लिखें... 😊' },
+    es: { welcome: '¡Hola! ¿En qué puedo ayudarte hoy?', send: 'Enviar', typing: `${brandName} está escribiendo...`, mic: '🎤', placeholder: 'Escribe un mensaje... 😊' },
+    fr: { welcome: 'Bonjour ! Comment puis-je vous aider ?', send: 'Envoyer', typing: `${brandName} est en train d\'écrire...`, mic: '🎤', placeholder: 'Tapez un message... 😊' },
+    zh: { welcome: '你好！我能为您做些什么？', send: '发送', typing: `${brandName} 正在输入...`, mic: '🎤', placeholder: '输入消息... 😊' },
+    ar: { welcome: 'مرحبًا! كيف يمكنني مساعدتك؟', send: 'إرسال', typing: `${brandName} يكتب...`, mic: '🎤', placeholder: 'اكتب رسالة... 😊' },
   };
 
-  const t = key => translations[currentLang][key] || key;
+  const t = (key) => translations[currentLang][key] || key;
 
   const style = document.createElement('style');
   style.textContent = `
-    .botify-btn { position: fixed; ${positionStyles} background: linear-gradient(135deg, ${primaryColor}, #6c63ff); color: white; border: none; border-radius: 50%; width: 70px; height: 70px; font-size: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 10px 25px rgba(0,0,0,0.3); transition: all 0.3s ease; z-index: 9999; }
+    .botify-btn { position: fixed; ${positionStyles} background: linear-gradient(135deg, ${primaryColor}, #6c63ff); color: white; border: none; border-radius: 50%; width: 60px; height: 60px; font-size: 30px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 10px 25px rgba(0,0,0,0.3); transition: all 0.3s ease; z-index: 9999; }
     .botify-btn:hover { transform: scale(1.1); }
-    .botify-container { position: fixed; ${positionStyles} width: 380px; max-height: 600px; background: rgba(255,255,255,0.98); backdrop-filter: blur(15px); border-radius: ${borderRadius}; font-family: ${fontFamily}; box-shadow: 0 15px 45px rgba(0,0,0,0.4); display: flex; flex-direction: column; overflow: hidden; z-index: 9999; animation: slideIn 0.4s ease forwards; transform: translateY(30px); opacity: 0; }
-    .botify-container.dark { background: rgba(34,34,34,0.98); color: white; }
+
+    .botify-container { position: fixed; ${positionStyles} width: 360px; max-height: 600px; background: white; border-radius: ${borderRadius}; font-family: ${fontFamily}; box-shadow: 0 15px 45px rgba(0,0,0,0.3); display: flex; flex-direction: column; overflow: hidden; z-index: 9999; transform: translateY(40px); opacity: 0; animation: slideIn 0.4s forwards; }
+    .botify-container.dark { background: #2b2b2b; color: white; }
+    .botify-container.gradient { background: linear-gradient(135deg, #4f46e5, #6c63ff); color: white; }
+
     @keyframes slideIn { to { transform: translateY(0); opacity: 1; } }
-    .botify-header { background: linear-gradient(135deg, ${primaryColor}, #6c63ff); color: white; padding: 14px; display: flex; justify-content: space-between; align-items: center; }
-    .botify-header select, .botify-header button { background: transparent; border: none; color: white; cursor: pointer; font-size: 16px; }
-    .botify-messages { flex: 1; padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
-    .botify-msg { max-width: 75%; padding: 10px 14px; border-radius: 16px; line-height: 1.4; word-wrap: break-word; }
-    .botify-msg.user { background: #d1e3ff; align-self: flex-end; border-bottom-right-radius: 4px; }
-    .botify-msg.bot { background: #f0f0f0; align-self: flex-start; border-bottom-left-radius: 4px; }
+
+    .botify-header { background: linear-gradient(135deg, ${primaryColor}, #6c63ff); color: white; padding: 12px; display: flex; align-items: center; gap: 8px; font-size: 15px; }
+    .botify-header img { width: 32px; height: 32px; border-radius: 50%; }
+    .botify-header span { flex: 1; }
+    .botify-header select, .botify-header button { background: none; border: none; color: white; font-size: 14px; cursor: pointer; }
+
+    .botify-messages { flex: 1; padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; background: #f9f9f9; color: #333; }
+    .botify-container.dark .botify-messages { background: #444; color: white; }
+
+    .botify-msg { padding: 10px 14px; border-radius: 20px; max-width: 80%; line-height: 1.4; word-wrap: break-word; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+    .botify-msg.user { background: #d1e3ff; align-self: flex-end; }
+    .botify-msg.bot { background: #fff; align-self: flex-start; }
     .botify-container.dark .botify-msg.bot { background: #555; }
-    .botify-input { display: flex; border-top: 1px solid #ddd; background: #fafafa; padding: 8px; align-items: center; }
+
+    .botify-quick-replies { display: flex; gap: 6px; margin-top: 6px; }
+    .botify-quick-replies button { background: #4f46e5; color: white; border: none; border-radius: 14px; padding: 6px 10px; cursor: pointer; font-size: 12px; }
+
+    .botify-input { display: flex; align-items: center; padding: 8px; background: #fff; border-top: 1px solid #ddd; }
+    .botify-container.dark .botify-input { background: #333; }
     .botify-input input { flex: 1; border: none; padding: 10px; font-size: 14px; outline: none; background: none; }
-    .botify-input button { background: ${primaryColor}; color: white; border: none; padding: 10px 16px; font-size: 16px; cursor: pointer; border-radius: 8px; }
+    .botify-input button { background: ${primaryColor}; color: white; border: none; padding: 8px 14px; border-radius: 50%; font-size: 16px; margin-left: 5px; cursor: pointer; }
     .botify-input button:hover { background: #5a54e8; }
+    .botify-mic-btn { background: transparent; border: none; font-size: 18px; color: ${primaryColor}; margin-left: 5px; cursor: pointer; }
+
+    .botify-loader { border: 3px solid #f3f3f3; border-top: 3px solid ${primaryColor}; border-radius: 50%; width: 16px; height: 16px; animation: spin 1s linear infinite; }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
   `;
   document.head.appendChild(style);
 
@@ -55,48 +71,75 @@
   container.className = `botify-container ${currentTheme}`; container.style.display = 'none';
   container.innerHTML = `
     <div class="botify-header">
-      <span id="botify-title">${t('assistant')}</span>
-      <div>
-        <select id="botify-lang">${Object.keys(translations).map(lang => `<option value="${lang}"${lang === currentLang ? ' selected' : ''}>${lang.toUpperCase()}</option>`)}</select>
-        <button id="theme-toggle">${t('theme')[currentTheme]}</button>
-      </div>
+      <img src="https://cdn-icons-png.flaticon.com/512/4712/4712109.png" alt="Bot">
+      <span>${brandName} Chat</span>
+      <select id="botify-lang"><option value="en">EN</option><option value="hi">हिंदी</option><option value="es">ES</option><option value="fr">FR</option><option value="zh">中文</option><option value="ar">العربية</option></select>
+      <button id="theme-toggle">${currentTheme === 'light' ? '🌙' : '☀️'}</button>
     </div>
     <div class="botify-messages" id="botify-messages"></div>
     <div class="botify-input">
-      <input type="text" placeholder="${t('typeMessage')}" id="botify-input">
-      <button id="botify-send">${t('send')}</button>
+      <input type="text" placeholder="${t('placeholder')}" id="botify-input">
+      <button id="botify-mic" class="botify-mic-btn">${t('mic')}</button>
+      <button id="botify-send">➤</button>
     </div>
   `;
   document.body.appendChild(container);
 
-  const sendBtn = container.querySelector('#botify-send'), inputField = container.querySelector('#botify-input'),
-        messagesDiv = container.querySelector('#botify-messages'), themeToggle = container.querySelector('#theme-toggle'),
-        langSelect = container.querySelector('#botify-lang');
+  button.addEventListener('click', () => container.style.display = container.style.display === 'none' ? 'flex' : 'none');
+  const sendBtn = container.querySelector('#botify-send');
+  const inputField = container.querySelector('#botify-input');
+  const micBtn = container.querySelector('#botify-mic');
+  const messagesDiv = container.querySelector('#botify-messages');
+  const themeToggle = container.querySelector('#theme-toggle');
+  const langSelect = container.querySelector('#botify-lang');
 
-  const refreshTexts = () => {
-    container.querySelector('#botify-title').textContent = t('assistant');
-    inputField.placeholder = t('typeMessage');
-    sendBtn.textContent = t('send');
-    themeToggle.textContent = t('theme')[currentTheme];
+  const appendMessage = (sender, text, loader = false) => {
+    const msg = document.createElement('div');
+    msg.className = `botify-msg ${sender === 'You' ? 'user' : 'bot'}`;
+    msg.innerHTML = loader ? `<span class="botify-loader"></span> ${t('typing')}` : text;
+    messagesDiv.appendChild(msg);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
   };
-  langSelect.addEventListener('change', () => { currentLang = langSelect.value; refreshTexts(); });
 
-  button.addEventListener('click', () => { container.style.display = container.style.display === 'none' ? 'flex' : 'none'; });
-  themeToggle.addEventListener('click', () => { currentTheme = currentTheme === 'light' ? 'dark' : 'light'; container.classList.toggle('dark', currentTheme === 'dark'); themeToggle.textContent = t('theme')[currentTheme]; });
-
-  const appendMessage = (sender, text) => {
-    const msg = document.createElement('div'); msg.className = `botify-msg ${sender}`; msg.innerHTML = text;
-    messagesDiv.appendChild(msg); messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  const appendQuickReplies = () => {
+    const quickDiv = document.createElement('div');
+    quickDiv.className = 'botify-quick-replies';
+    ['Order Status', 'Shipping', 'Refund Info', 'Help'].forEach(q => {
+      const btn = document.createElement('button');
+      btn.textContent = q; btn.onclick = () => { inputField.value = q; sendBtn.click(); };
+      quickDiv.appendChild(btn);
+    });
+    messagesDiv.appendChild(quickDiv);
   };
 
   sendBtn.addEventListener('click', async () => {
     const question = inputField.value.trim(); if (!question) return;
-    appendMessage('user', question); inputField.value = '';
-    const loader = document.createElement('div'); loader.className = 'botify-msg bot'; loader.innerHTML = `${t('typing')}`; messagesDiv.appendChild(loader);
+    appendMessage('You', question); inputField.value = '';
+    const typingIndicator = document.createElement('div');
+    typingIndicator.className = 'botify-msg typing'; typingIndicator.innerHTML = `<span class="botify-loader"></span> ${t('typing')}`;
+    messagesDiv.appendChild(typingIndicator); messagesDiv.scrollTop = messagesDiv.scrollHeight;
     try {
-      const res = await fetch(`${BASE_URL}/api/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-user-id': userId }, body: JSON.stringify({ question, lang: currentLang, faqs: [] }) });
-      const data = await res.json(); messagesDiv.removeChild(loader); appendMessage('bot', data.reply || t('error'));
-    } catch { messagesDiv.removeChild(loader); appendMessage('bot', t('error')); }
+      const response = await fetch(`${BASE_URL}/api/chat`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-user-id': userId },
+        body: JSON.stringify({ question, lang: currentLang, faqs: [] }),
+      });
+      const data = await response.json();
+      messagesDiv.removeChild(typingIndicator); appendMessage('Bot', data.reply || 'No response');
+      appendQuickReplies();
+    } catch (err) {
+      messagesDiv.removeChild(typingIndicator); appendMessage('Bot', 'Error connecting to server');
+    }
   });
+
   inputField.addEventListener('keypress', e => { if (e.key === 'Enter') sendBtn.click(); });
+  themeToggle.addEventListener('click', () => { currentTheme = currentTheme === 'light' ? 'dark' : currentTheme === 'dark' ? 'gradient' : 'light'; container.className = `botify-container ${currentTheme}`; });
+  langSelect.addEventListener('change', e => { currentLang = e.target.value; inputField.placeholder = t('placeholder'); });
+
+  if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition(); recognition.lang = 'en-US'; recognition.interimResults = false; recognition.maxAlternatives = 1;
+    micBtn.addEventListener('click', () => recognition.start());
+    recognition.onresult = e => inputField.value += e.results[0][0].transcript + ' ';
+    recognition.onerror = e => console.error('Speech error:', e.error);
+  } else { micBtn.style.display = 'none'; }
 })();
