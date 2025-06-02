@@ -13,7 +13,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 import Papa from "papaparse";
 
 const FAQForm = ({ faqs, setFaqs }) => {
@@ -140,8 +140,8 @@ const FAQForm = ({ faqs, setFaqs }) => {
     const rows = [["Question", "Answer", "Created At"]];
     faqs.forEach((faq) => {
       rows.push([
-        faq.q,
-        faq.a,
+        `"${faq.q}"`, // Quote to handle commas
+        `"${faq.a}"`,
         faq.createdAt?.toDate?.().toLocaleString() || "N/A",
       ]);
     });
@@ -156,7 +156,7 @@ const FAQForm = ({ faqs, setFaqs }) => {
   const exportToPDF = () => {
     const doc = new jsPDF();
     doc.text("📋 FAQs Report", 14, 20);
-    doc.autoTable({
+    autoTable(doc, {
       head: [["Question", "Answer", "Created At"]],
       body: faqs.map((faq) => [
         faq.q,
