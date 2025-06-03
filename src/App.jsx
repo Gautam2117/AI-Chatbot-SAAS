@@ -5,6 +5,7 @@ import ChatTester from "./components/ChatTester";
 import { AuthContext } from "./context/AuthProvider";
 import { signOut } from "firebase/auth";
 import { auth } from "./firebase";
+import botifyLogo from './assets/Botify_logo.png';
 
 export function MainContent() {
   const [faqs, setFaqs] = useState([]);
@@ -41,7 +42,15 @@ export function MainContent() {
     <main className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 flex items-start justify-center px-6 py-10">
       <div className="w-full max-w-5xl space-y-10 bg-white shadow-2xl rounded-3xl p-8 md:p-12 hover:scale-[1.02] transition-transform duration-500">
         <header className="flex items-center justify-between mb-6">
-          <h1 className="text-4xl font-extrabold text-indigo-700 drop-shadow-lg">💬 Botify Dashboard</h1>
+          <div className="flex items-center gap-4">
+            <img 
+              src={botifyLogo} 
+              alt="Botify Logo" 
+              className="w-16 h-16 rounded-full object-cover transition-transform duration-300 hover:scale-105 focus:scale-105 shadow-lg hover:shadow-2xl focus:shadow-2xl"
+              style={{ borderRadius: '50%' }}
+            />
+            <h1 className="text-4xl font-extrabold text-indigo-700 drop-shadow-lg">Botify Dashboard</h1>
+          </div>
           <button
             onClick={() => signOut(auth)}
             className="text-sm bg-gradient-to-r from-pink-600 to-purple-600 text-white px-4 py-2 rounded-lg hover:from-pink-700 hover:to-purple-700 transition"
