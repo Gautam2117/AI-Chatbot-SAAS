@@ -5,7 +5,7 @@
   const fontFamily = scriptTag.getAttribute('data-font') || 'Inter, sans-serif';
   const borderRadius = scriptTag.getAttribute('data-border-radius') || '24px';
   const position = scriptTag.getAttribute('data-position') || 'bottom-right';
-  const icon = `<img src="/chatbot_widget_logo.png" style="width:32px;height:32px;border-radius:50%;" alt="Botify">`;
+  const icon = `<img src="https://ai-chatbot-saas-eight.vercel.app/public/Botify_logo.png" style="width:32px;height:32px;border-radius:50%;" alt="Botify">`;
   const BASE_URL = 'https://ai-chatbot-backend-h669.onrender.com';
   const brandName = scriptTag.getAttribute('data-brand') || 'Botify';
   const positionStyles = position === 'bottom-left' ? 'bottom: 20px; left: 20px;' : 'bottom: 20px; right: 20px;';
