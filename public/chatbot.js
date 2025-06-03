@@ -48,7 +48,14 @@
       background: linear-gradient(135deg, ${primaryColor}, #6c63ff); color: white;
       padding: 12px; display: flex; align-items: center; gap: 8px; font-size: 15px;
     }
-    .botify-header img { width: 32px; height: 32px; border-radius: 50%; }
+    .botify-header img {
+      width: 40px;
+      height: 40px;
+      aspect-ratio: 1/1;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
     .botify-header span { flex: 1; font-weight: 600; }
     .botify-header select, .botify-header button {
       background: rgba(255,255,255,0.2); border: none; color: white; font-size: 14px;
