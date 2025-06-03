@@ -5,11 +5,11 @@
   const fontFamily = scriptTag.getAttribute('data-font') || 'Inter, sans-serif';
   const borderRadius = scriptTag.getAttribute('data-border-radius') || '24px';
   const position = scriptTag.getAttribute('data-position') || 'bottom-right';
-  const icon = `<img src="https://ai-chatbot-saas-eight.vercel.app/chatbot_widget_logo.png" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" alt="Botify Logo">`;
-  const BASE_URL = 'https://ai-chatbot-backend-h669.onrender.com';
   const brandName = scriptTag.getAttribute('data-brand') || 'Botify';
+  const BASE_URL = 'https://ai-chatbot-backend-h669.onrender.com';
   const positionStyles = position === 'bottom-left' ? 'bottom: 20px; left: 20px;' : 'bottom: 20px; right: 20px;';
   let currentLang = 'en';
+  let currentTheme = 'light';
 
   const translations = {
     en: { welcome: 'Hello! How can I assist you today?', send: 'Send', typing: `${brandName} is typing...`, mic: '🎤', placeholder: 'Type a message... 😊' },
@@ -24,23 +24,52 @@
 
   const style = document.createElement('style');
   style.textContent = `
-    .botify-btn { position: fixed; ${positionStyles} background: linear-gradient(135deg, ${primaryColor}, #6c63ff); border: none; border-radius: 50%; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 10px 25px rgba(0,0,0,0.3); transition: all 0.3s ease; z-index: 9999; }
-    .botify-btn:hover { transform: scale(1.1); }
-    .botify-container { position: fixed; ${positionStyles} width: 360px; max-height: 600px; border-radius: ${borderRadius}; font-family: ${fontFamily}; box-shadow: 0 15px 45px rgba(0,0,0,0.3); display: flex; flex-direction: column; overflow: hidden; z-index: 9999; transform: translateY(40px); opacity: 0; animation: slideIn 0.4s forwards; background: #fff; color: #333; }
+    .botify-btn {
+      position: fixed; ${positionStyles}
+      background: none; border: none; padding: 0; cursor: pointer; z-index: 9999;
+    }
+    .botify-btn img {
+      width: 60px; height: 60px; border-radius: 50%; object-fit: cover; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      transition: transform 0.3s ease;
+    }
+    .botify-btn img:hover { transform: scale(1.1); }
+
+    .botify-container {
+      position: fixed; ${positionStyles}
+      width: 360px; max-height: 600px; border-radius: ${borderRadius}; font-family: ${fontFamily};
+      box-shadow: 0 15px 45px rgba(0,0,0,0.3); display: flex; flex-direction: column; overflow: hidden;
+      z-index: 9999; transform: translateY(40px); opacity: 0; animation: slideIn 0.4s forwards;
+      background: #fff; color: #333;
+    }
+    .botify-container.dark { background: #2b2b2b; color: #fff; }
     @keyframes slideIn { to { transform: translateY(0); opacity: 1; } }
-    .botify-header { background: linear-gradient(135deg, ${primaryColor}, #6c63ff); color: white; padding: 12px; display: flex; align-items: center; gap: 8px; font-size: 15px; }
+
+    .botify-header {
+      background: linear-gradient(135deg, ${primaryColor}, #6c63ff); color: white;
+      padding: 12px; display: flex; align-items: center; gap: 8px; font-size: 15px;
+    }
     .botify-header img { width: 32px; height: 32px; border-radius: 50%; }
     .botify-header span { flex: 1; font-weight: 600; }
-    .botify-header select { background: rgba(255,255,255,0.2); border: none; color: white; font-size: 14px; cursor: pointer; border-radius: 6px; padding: 4px 8px; }
+    .botify-header select, .botify-header button {
+      background: rgba(255,255,255,0.2); border: none; color: white; font-size: 14px;
+      cursor: pointer; border-radius: 6px; padding: 4px 8px; transition: background 0.3s ease;
+    }
     .botify-header select option { color: #333; background: #fff; }
+
     .botify-messages { flex: 1; padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; background: #f9f9f9; color: #333; }
+    .botify-container.dark .botify-messages { background: #444; color: #fff; }
+
     .botify-msg { padding: 10px 14px; border-radius: 20px; max-width: 80%; line-height: 1.4; word-wrap: break-word; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
     .botify-msg.user { background: #d1e3ff; align-self: flex-end; }
     .botify-msg.bot { background: #fff; align-self: flex-start; }
+    .botify-container.dark .botify-msg.bot { background: #555; }
+
     .botify-input { display: flex; align-items: center; padding: 8px; border-top: 1px solid #ddd; background: #fafafa; }
+    .botify-container.dark .botify-input { background: #333; }
     .botify-input input { flex: 1; border: none; padding: 10px; font-size: 14px; outline: none; background: none; }
     .botify-input button { background: ${primaryColor}; color: white; border: none; padding: 8px 14px; border-radius: 50%; font-size: 16px; margin-left: 5px; cursor: pointer; }
     .botify-input button:hover { background: #5a54e8; }
+
     .botify-mic-btn { background: transparent; border: none; font-size: 18px; color: ${primaryColor}; margin-left: 5px; cursor: pointer; }
     .botify-loader { border: 3px solid #f3f3f3; border-top: 3px solid ${primaryColor}; border-radius: 50%; width: 16px; height: 16px; animation: spin 1s linear infinite; }
     @keyframes spin { 100% { transform: rotate(360deg); } }
@@ -48,7 +77,8 @@
   document.head.appendChild(style);
 
   const button = document.createElement('button');
-  button.className = 'botify-btn'; button.innerHTML = icon;
+  button.className = 'botify-btn';
+  button.innerHTML = `<img src="https://ai-chatbot-saas-eight.vercel.app/chatbot_widget_logo.png" alt="Botify Logo">`;
   document.body.appendChild(button);
 
   const container = document.createElement('div');
@@ -56,9 +86,10 @@
   container.style.display = 'none';
   container.innerHTML = `
     <div class="botify-header">
-      ${icon}
+      <img src="https://ai-chatbot-saas-eight.vercel.app/chatbot_widget_logo.png" alt="Botify">
       <span>${brandName} Chat</span>
       <select id="botify-lang">${Object.keys(translations).map(l => `<option value="${l}" ${l===currentLang?'selected':''}>${l.toUpperCase()}</option>`).join('')}</select>
+      <button id="theme-toggle">🌓</button>
     </div>
     <div class="botify-messages" id="botify-messages"></div>
     <div class="botify-input">
@@ -70,10 +101,12 @@
   document.body.appendChild(container);
 
   button.addEventListener('click', () => container.style.display = container.style.display === 'none' ? 'flex' : 'none');
+
   const sendBtn = container.querySelector('#botify-send');
   const inputField = container.querySelector('#botify-input');
   const micBtn = container.querySelector('#botify-mic');
   const messagesDiv = container.querySelector('#botify-messages');
+  const themeToggle = container.querySelector('#theme-toggle');
   const langSelect = container.querySelector('#botify-lang');
 
   const appendMessage = (sender, text, loader = false) => {
@@ -96,6 +129,10 @@
     } catch (err) { messagesDiv.removeChild(typing); appendMessage('Bot', 'Error connecting to server'); }
   });
   inputField.addEventListener('keypress', e => { if (e.key==='Enter') sendBtn.click(); });
+  themeToggle.addEventListener('click', () => {
+    container.classList.toggle('dark');
+    themeToggle.textContent = container.classList.contains('dark') ? '☀️' : '🌙';
+  });
   langSelect.addEventListener('change', e => { currentLang = e.target.value; inputField.placeholder = t('placeholder'); });
 
   if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
