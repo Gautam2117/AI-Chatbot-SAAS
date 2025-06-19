@@ -1,6 +1,6 @@
 import React from 'react';
 import Lottie from 'react-lottie-player';
-import loaderAnimation from '../assets/payment-loader.json'; // Use a custom Lottie loader or animation file
+import loaderAnimation from '../assets/payment-loader.json';
 
 const PaymentLoader = () => {
   return (
