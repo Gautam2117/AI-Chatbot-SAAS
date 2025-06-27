@@ -100,7 +100,7 @@
       <button id="botify-mic" class="botify-mic-btn">${t('mic')}</button>
       <button id="botify-send">➤</button>
     </div>
-    ${showPoweredBy ? `<div class="botify-footer">Powered by <a href="https://botify.site" target="_blank" style="color:${primaryColor};font-weight:600;">Botify</a></div>` : ''}
+    ${showPoweredBy ? `<div class="botify-footer">Powered by <a href="https://botify-website.vercel.app/" target="_blank" style="color:${primaryColor};font-weight:600;">Botify</a></div>` : ''}
   `;
   document.body.appendChild(container);
 
