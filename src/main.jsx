@@ -5,6 +5,8 @@ import App, { MainContent } from './App';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import AdminDashboard from "./pages/AdminDashboard";
+import AdminLeads from "./pages/AdminLeads";
+import AdminSettings from "./pages/AdminSettings";
 import About from './pages/About';
 import Contact from './pages/Contact';
 import Pricing from './pages/Pricing';
@@ -38,6 +40,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/leads" element={<AdminLeads />} />
+          <Route path="/admin/settings" element={<AdminSettings />} />
           <Route path="/payment-success" element={<PaymentSuccess />} />
           <Route path="/payment-failure" element={<PaymentFailure />} />
           {/* Optional loader route */}

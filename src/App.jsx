@@ -1,3 +1,4 @@
+// MainContent.jsx
 import React, { useState, useContext, useEffect } from "react";
 import { Navigate, useNavigate, Link } from "react-router-dom";
 import FAQForm from "./components/FAQForm";
@@ -33,7 +34,14 @@ export function MainContent() {
     alert(`✅ ${message}`);
   };
 
-  const scriptTag = `<script src="https://ai-chatbot-saas-eight.vercel.app/chatbot.js" data-user-id="${user.uid}" data-color="#4f46e5" data-position="bottom-right"></script>`;
+  const scriptTag = `<script src="https://ai-chatbot-saas-eight.vercel.app/chatbot.js"
+  data-user-id="${user.uid}"
+  data-color="#4f46e5"
+  data-position="bottom-right"
+  data-font="Inter, sans-serif"
+  data-brand="Botify"
+  data-border-radius="24px"
+></script>`;
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 flex items-start justify-center px-6 py-10">
@@ -73,21 +81,27 @@ export function MainContent() {
           </p>
         </section>
 
-        {/* Script Embed */}
+        {/* Script Embed Section */}
         <section className="bg-gradient-to-r from-yellow-100 to-yellow-200 border-l-4 border-yellow-500 p-4 rounded-lg shadow-sm">
           <h3 className="font-semibold text-yellow-700">🔌 Embed Chatbot Script</h3>
           <p className="text-sm text-yellow-800">
-            Paste this code into your site’s <code>&lt;body&gt;</code> tag:
+            Paste the following code snippet inside your website’s <code>&lt;body&gt;</code> tag:
           </p>
-          <pre className="bg-gray-100 p-2 rounded text-xs overflow-x-auto">{scriptTag}</pre>
+          <pre className="bg-gray-100 p-2 rounded text-xs overflow-x-auto whitespace-pre-wrap">{scriptTag}</pre>
           <button
             onClick={() => handleCopy(scriptTag, "Script tag copied! Paste into your site's <body>")}
             className="mt-2 text-xs bg-yellow-600 text-white px-3 py-1 rounded hover:bg-yellow-700 transition"
           >
             📋 Copy Script Tag
           </button>
-          <p className="text-xs text-yellow-800 mt-2">
-            🛠️ Customizable attributes: <code>data-user-id</code>, <code>data-color</code>, <code>data-position</code>, <code>data-welcome-message</code>, <code>data-faq-category</code>
+          <p className="text-xs text-yellow-800 mt-2 leading-relaxed">
+            🛠️ <strong>Customizable Attributes:</strong><br />
+            <code>data-user-id</code>: your unique user ID<br />
+            <code>data-color</code>: button & theme color (e.g., <code>#10b981</code>)<br />
+            <code>data-font</code>: font family (e.g., <code>'Poppins'</code>)<br />
+            <code>data-brand</code>: chatbot header title<br />
+            <code>data-position</code>: <code>bottom-right</code> | <code>bottom-left</code><br />
+            <code>data-border-radius</code>: button/chatbot rounding (e.g., <code>16px</code>)
           </p>
         </section>
 

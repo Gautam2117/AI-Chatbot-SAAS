@@ -184,12 +184,35 @@ export default function AdminDashboard() {
       </div>
 
       <div className="flex flex-wrap gap-3 justify-end mb-6">
-        <button onClick={exportCSV} className="flex items-center gap-2 bg-green-600 text-white px-5 py-2 rounded-full hover:bg-green-700 transition">
-          <FaDownload /> CSV
-        </button>
-        <button onClick={exportPDF} className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2 rounded-full hover:bg-blue-700 transition">
-          <FaDownload /> PDF
-        </button>
+        <div className="flex flex-wrap gap-3 justify-end mb-6">
+          <button
+            onClick={() => navigate("/admin/leads")}
+            className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2 rounded-full hover:bg-indigo-700 transition"
+          >
+            📥 View Leads
+          </button>
+          <button
+            onClick={() => navigate("/admin/settings")}
+            className="flex items-center gap-2 bg-purple-600 text-white px-5 py-2 rounded-full hover:bg-purple-700 transition"
+          >
+            ⚙️ Bot Settings
+          </button>
+
+          <button
+            onClick={exportCSV}
+            className="flex items-center gap-2 bg-green-600 text-white px-5 py-2 rounded-full hover:bg-green-700 transition"
+          >
+            <FaDownload /> CSV
+          </button>
+
+          <button
+            onClick={exportPDF}
+            className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2 rounded-full hover:bg-blue-700 transition"
+          >
+            <FaDownload /> PDF
+          </button>
+        </div>
+
       </div>
 
       <div className="bg-white p-4 rounded-lg shadow-xl mb-10">
