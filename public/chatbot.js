@@ -75,6 +75,39 @@
 
     .botify-mic-btn { background: transparent; border: none; font-size: 18px; color: ${primaryColor}; margin-left: 5px; cursor: pointer; }
     .botify-footer { font-size: 10px; text-align: center; color: #aaa; padding: 6px 0; }
+    .typing-bubble {
+      display: flex;
+      gap: 4px;
+      justify-content: flex-start;
+      align-items: center;
+      padding: 4px 0;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      background-color: ${primaryColor};
+      border-radius: 50%;
+      animation: typingDots 1.2s infinite ease-in-out;
+    }
+
+    .dot:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+    .dot:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+
+    @keyframes typingDots {
+      0%, 80%, 100% {
+        transform: scale(0.8);
+        opacity: 0.3;
+      }
+      40% {
+        transform: scale(1.2);
+        opacity: 1;
+      }
+    }
   `;
   document.head.appendChild(style);
 
@@ -85,6 +118,9 @@
 
   const container = document.createElement('div');
   container.className = 'botify-container';
+  container.setAttribute('role', 'dialog');
+  container.setAttribute('aria-label', `${brandName} Chat Widget`);
+  container.setAttribute('aria-live', 'polite');
   container.style.display = 'none';
 
   container.innerHTML = `
@@ -105,7 +141,9 @@
   document.body.appendChild(container);
 
   button.addEventListener('click', () => {
-    container.style.display = container.style.display === 'none' ? 'flex' : 'none';
+    const isOpening = container.style.display === 'none';
+    container.style.display = isOpening ? 'flex' : 'none';
+    if (isOpening) inputField.focus();
   });
 
   const sendBtn = container.querySelector('#botify-send');
@@ -118,7 +156,20 @@
   const appendMessage = (sender, text, isTyping = false) => {
     const msg = document.createElement('div');
     msg.className = `botify-msg ${sender === 'You' ? 'user' : 'bot'}`;
-    msg.innerHTML = isTyping ? `<span class="botify-loader"></span> ${t('typing')}` : text;
+
+    if (isTyping) {
+      msg.innerHTML = `
+        <div class="typing-bubble">
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="dot"></span>
+        </div>
+        <div style="margin-top: 4px;">${t('typing')}</div>
+      `;
+    } else {
+      msg.innerHTML = text;
+    }
+
     messagesDiv.appendChild(msg);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
     return msg;
@@ -147,17 +198,32 @@
         })
       });
 
-      const data = await res.json();
-      messagesDiv.removeChild(typingMsg);
-      appendMessage('Bot', data.reply || 'No response');
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let accumulatedText = '';
+      typingMsg.innerHTML = ''; // Clear loader
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        accumulatedText += chunk;
+        typingMsg.textContent = accumulatedText;
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      }
+
+      typingMsg.innerHTML = accumulatedText || '⚠️ No response';
     } catch (error) {
       messagesDiv.removeChild(typingMsg);
       appendMessage('Bot', '⚠️ Unable to connect to server.');
     }
   });
 
-  inputField.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') sendBtn.click();
+  inputField.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      sendBtn.click();
+    }
   });
 
   themeToggle.addEventListener('click', () => {

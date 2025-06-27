@@ -106,38 +106,44 @@ const ChatTester = () => {
       return;
     }
     if (!userQ.trim()) return;
-    setLoading(true);
+
     setBotAnswer("");
+    setLoading(true);
+
     try {
-      const res = await axios.post(
-        `${BASE_URL}/api/chat`,
-        {
-          question: userQ,
-          faqs,
+      const response = await fetch(`${BASE_URL}/api/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-id": user.uid,
         },
-        {
-          headers: { "x-user-id": user.uid },
-        }
-      );
+        body: JSON.stringify({ question: userQ }),
+      });
 
-      setBotAnswer(res.data.reply);
-      setDailyLimit(res.data.dailyLimit); // optional, backend override
-      setTier(res.data.tier || "free");   // optional, backend override
+      if (!response.ok) {
+        const errorData = await response.json();
+        setBotAnswer(errorData.error || "Something went wrong.");
+        setLoading(false);
+        return;
+      }
 
-      // 🔥 Update Firestore usage doc with new data
-      await setDoc(
-        doc(db, "usage", user.uid),
-        {
-          tokensUsed: res.data.tokensUsed, // total tokens used today
-          lastReset: Timestamp.now(),
-        },
-        { merge: true }
-      );
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let streamedText = "";
 
-      // ❌ Removed setTokensUsed(res.data.tokensUsed) to avoid UI conflicts
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        streamedText += chunk;
+        setBotAnswer((prev) => prev + chunk); // Live update
+      }
+
+      setLoading(false);
     } catch (err) {
-      setBotAnswer(err.response?.data?.error || "❌ Error getting response.");
-    } finally {
+      console.error("🔥 Stream error:", err);
+      setBotAnswer("❌ Failed to fetch response.");
       setLoading(false);
     }
   };
