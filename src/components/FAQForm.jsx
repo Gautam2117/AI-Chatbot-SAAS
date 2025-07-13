@@ -15,6 +15,7 @@ import {
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import Papa from "papaparse";
+import DOMPurify from "dompurify";
 
 const FAQForm = ({ faqs, setFaqs }) => {
   const [question, setQuestion] = useState("");
@@ -33,10 +34,10 @@ const FAQForm = ({ faqs, setFaqs }) => {
   const { user } = useContext(AuthContext);
 
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid || !user?.companyId) return;
 
-    const faqsCollection = collection(db, "faqs", user.uid, "list");
-    const q = query(faqsCollection); // removed orderBy to support missing createdAt
+    const faqsCollection = collection(db, "faqs", user.companyId, "list");
+    const q = query(faqsCollection);
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedFaqs = snapshot.docs.map((doc) => ({
         id: doc.id,
@@ -44,6 +45,7 @@ const FAQForm = ({ faqs, setFaqs }) => {
       }));
       setFaqs(fetchedFaqs);
     });
+
     return () => unsubscribe();
   }, [user, setFaqs]);
 
@@ -52,10 +54,10 @@ const FAQForm = ({ faqs, setFaqs }) => {
     if (question.trim() && answer.trim()) {
       try {
         setIsSaving(true);
-        await addDoc(collection(db, "faqs", user.uid, "list"), {
-          q: question,
-          a: answer,
-          createdAt: serverTimestamp(), // Ensure date is saved
+        await addDoc(collection(db, "faqs", user.companyId, "list"), {
+          q: DOMPurify.sanitize(question),
+          a: DOMPurify.sanitize(answer),
+          createdAt: serverTimestamp(),
         });
         setQuestion("");
         setAnswer("");
@@ -83,9 +85,9 @@ const FAQForm = ({ faqs, setFaqs }) => {
     if (!user?.uid || !editId || !editQuestion.trim() || !editAnswer.trim()) return;
     try {
       setIsSaving(true);
-      await updateDoc(doc(db, "faqs", user.uid, "list", editId), {
-        q: editQuestion,
-        a: editAnswer,
+      await updateDoc(doc(db, "faqs", user.companyId, "list", editId), {
+        q: DOMPurify.sanitize(editQuestion),
+        a: DOMPurify.sanitize(editAnswer),
         updatedAt: serverTimestamp(),
       });
       cancelEdit();
@@ -101,7 +103,7 @@ const FAQForm = ({ faqs, setFaqs }) => {
     if (!user?.uid || !confirmDeleteId) return;
     try {
       setIsDeleting(true);
-      await deleteDoc(doc(db, "faqs", user.uid, "list", confirmDeleteId));
+      await deleteDoc(doc(db, "faqs", user.companyId, "list", confirmDeleteId));
       setConfirmDeleteId(null);
     } catch (err) {
       console.error("❌ Failed to delete FAQ:", err.message);
@@ -186,9 +188,9 @@ const FAQForm = ({ faqs, setFaqs }) => {
           const question = row["Question"]?.trim();
           const answer = row["Answer"]?.trim();
           if (question && answer) {
-            await addDoc(collection(db, "faqs", user.uid, "list"), {
-              q: question,
-              a: answer,
+            await addDoc(collection(db, "faqs", user.companyId, "list"), {
+              q: DOMPurify.sanitize(question),
+              a: DOMPurify.sanitize(answer),
               createdAt: serverTimestamp(),
             });
           }

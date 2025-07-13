@@ -1,18 +1,29 @@
 import { auth } from "../firebase";
-import { GoogleAuthProvider, signInWithEmailAndPassword, signInWithPopup } from "firebase/auth";
+import {
+  GoogleAuthProvider,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+} from "firebase/auth";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
-import { FcGoogle } from "react-icons/fc"; // Google Icon
+import { useContext, useEffect, useState } from "react";
+import { AuthContext } from "../context/AuthProvider";
+import { FcGoogle } from "react-icons/fc";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const navigate = useNavigate();
+  const { user } = useContext(AuthContext);
+
+  useEffect(() => {
+    if (user) {
+      navigate("/");
+    }
+  }, [user, navigate]);
 
   const loginWithEmail = async () => {
     try {
       await signInWithEmailAndPassword(auth, email, pass);
-      navigate("/");
     } catch (e) {
       alert(e.message);
     }
@@ -21,7 +32,6 @@ export default function Login() {
   const loginWithGoogle = async () => {
     try {
       await signInWithPopup(auth, new GoogleAuthProvider());
-      navigate("/");
     } catch (e) {
       alert(e.message);
     }

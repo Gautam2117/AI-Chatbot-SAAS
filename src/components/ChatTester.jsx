@@ -14,6 +14,7 @@ import { useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { TypeAnimation } from "react-type-animation";
+import rehypeSanitize from "rehype-sanitize";
 
 const ChatTester = () => {
   const { user } = useContext(AuthContext);
@@ -22,83 +23,86 @@ const ChatTester = () => {
   const [botAnswer, setBotAnswer] = useState("");
   const [loading, setLoading] = useState(false);
   const [tokensUsed, setTokensUsed] = useState(0);
-  const [dailyLimit, setDailyLimit] = useState(2000);
+  const [dailyLimit, setDailyLimit] = useState(1000);
   const [tier, setTier] = useState("free");
   const [showPricing, setShowPricing] = useState(false);
   const navigate = useNavigate();
 
-  const BASE_URL =
-    import.meta.env.VITE_API_BASE_URL ||
-    "https://ai-chatbot-backend-h669.onrender.com";
+  const BASE_URL = "http://localhost:5000";
 
   useEffect(() => {
     if (!user?.uid) return;
 
-    const userRef = doc(db, "users", user.uid);
-    const usageRef = doc(db, "usage", user.uid);
-    const faqCollection = collection(db, "faqs", user.uid, "list");
+    const fetchUserCompany = async () => {
+      const userRef = doc(db, "users", user.uid);
+      const userSnap = await getDoc(userRef);
+      const userData = userSnap.data();
+      
+      if (!userData?.companyId) {
+        console.warn("⚠️ No companyId found for user.");
+        return;
+      }
 
-    const fetchTier = async () => {
-      try {
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const data = userSnap.data();
-          const userTier = data.tier || "free";
-          setTier(userTier);
+      const usageRef = doc(db, "companies", userData.companyId);
+      const faqCollection = collection(db, "faqs", userData.companyId, "list");
+
+      const fetchTier = async () => {
+        try {
+          const companySnap = await getDoc(usageRef);
+          const companyData = companySnap.exists() ? companySnap.data() : null;
+          const companyTier = companyData?.tier || "free";
+
+          setTier(companyTier);
           setDailyLimit(
-            userTier === "pro" ? 5000 : userTier === "unlimited" ? 999999 : 2000
+            companyTier === "pro"
+              ? 5000
+              : companyTier === "unlimited"
+              ? 999999
+              : 1000
           );
-        } else {
-          await setDoc(userRef, {
-            email: user.email,
-            role: "user",
-            tier: "free",
-          });
+        } catch (err) {
+          console.error("❌ Error fetching tier:", err.message);
           setTier("free");
-          setDailyLimit(2000);
+          setDailyLimit(1000);
         }
-      } catch (err) {
-        console.error("❌ Error fetching tier:", err.message);
-      }
+      };
+
+      await fetchTier();
+
+      const unsubscribeUsage = onSnapshot(
+        usageRef,
+        (snapshot) => {
+          if (snapshot.exists()) {
+            const data = snapshot.data();
+            const today = new Date().toDateString();
+            const lastReset = data.lastReset?.toDate().toDateString?.();
+            setTokensUsed(lastReset === today ? data.tokensUsedToday : 0);
+          }
+        },
+        (error) => {
+          console.error("❌ Error with usage snapshot:", error.message);
+        }
+      );
+
+      const unsubscribeFAQ = onSnapshot(
+        faqCollection,
+        (snapshot) => {
+          const updatedFaqs = snapshot.docs.map((doc) => doc.data());
+          setFaqs(updatedFaqs);
+        },
+        (error) => {
+          console.error("❌ Error with FAQ snapshot:", error.message);
+        }
+      );
+
+      return () => {
+        unsubscribeUsage();
+        unsubscribeFAQ();
+      };
     };
 
-    fetchTier();
-
-    const unsubscribeUsage = onSnapshot(
-      usageRef,
-      (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.data();
-          const today = new Date().toDateString();
-          const lastReset = data.lastReset?.toDate().toDateString?.();
-          setTokensUsed(lastReset === today ? data.tokensUsed : 0);
-        } else {
-          setDoc(usageRef, { tokensUsed: 0, lastReset: Timestamp.now() });
-          setTokensUsed(0);
-        }
-      },
-      (error) => {
-        console.error("❌ Error with usage snapshot:", error.message);
-      }
-    );
-
-    const unsubscribeFAQ = onSnapshot(
-      faqCollection,
-      (snapshot) => {
-        const updatedFaqs = snapshot.docs.map((doc) => doc.data());
-        setFaqs(updatedFaqs);
-        console.log("📡 Real-time FAQs updated:", updatedFaqs);
-      },
-      (error) => {
-        console.error("❌ Error with FAQ snapshot:", error.message);
-      }
-    );
-
-    return () => {
-      unsubscribeUsage();
-      unsubscribeFAQ();
-    };
-  }, [user]);
+    fetchUserCompany();
+  }, [user?.uid]);
 
   const testChat = async () => {
     if (!user?.uid) {
@@ -154,13 +158,12 @@ const ChatTester = () => {
       return;
     }
 
-    const amount = plan === "pro" ? 99 : 249;
-
     try {
+      // 🔐 Send only plan and userId — NOT amount
       const res = await axios.post(`${BASE_URL}/api/create-order`, {
-        amount,
-        userId: user.uid,
         plan,
+        userId: user.uid,
+        companyId: user.companyId || "", // if you're using companyId from context
       });
 
       const { orderId, amount: razorAmount, currency } = res.data;
@@ -173,22 +176,45 @@ const ChatTester = () => {
         description: `Upgrade to ${plan} Plan`,
         order_id: orderId,
         handler: async function (response) {
-          alert("✅ Payment Successful! Upgrading...");
-          await axios.post(`${BASE_URL}/api/upgrade-tier`, {
-            userId: user.uid,
-            plan,
-          });
-          setTier(plan);
-          setShowPricing(false);
-          navigate("/payment-success", {
-            state: {
-              plan,
-              amount: `₹${amount}`,
-              paymentId: response.razorpay_payment_id,
-              orderId: response.razorpay_order_id,
-            },
-          });
+          const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = response;
+
+          if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+            alert("❌ Missing payment details. Redirecting...");
+            return navigate("/");
+          }
+
+          try {
+            const verifyRes = await axios.post(`${BASE_URL}/api/verify-payment`, {
+              razorpay_order_id,
+              razorpay_payment_id,
+              razorpay_signature,
+            });
+
+            if (verifyRes.data.success) {
+              alert("✅ Payment Verified! Upgrading...");
+              await axios.post(`${BASE_URL}/api/upgrade-tier`, {
+                userId: user.uid,
+                plan,
+              });
+              setTier(plan);
+              setShowPricing(false);
+              navigate("/payment-success", {
+                state: {
+                  plan,
+                  amount: `₹${razorAmount / 100}`,
+                  paymentId: razorpay_payment_id,
+                  orderId: razorpay_order_id,
+                },
+              });
+            } else {
+              alert("❌ Payment verification failed.");
+            }
+          } catch (err) {
+            console.error("Verification Error:", err);
+            alert("❌ Payment verification failed.");
+          }
         },
+
         prefill: {
           name: user.displayName || "User",
           email: user.email || "test@example.com",
@@ -205,6 +231,7 @@ const ChatTester = () => {
       });
       rzp.open();
     } catch (err) {
+      console.error("Checkout Error:", err);
       alert(`❌ Payment error. ${err.message || ""}`);
     }
   };
@@ -273,6 +300,7 @@ const ChatTester = () => {
                 <ReactMarkdown
                   children={botAnswer}
                   remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeSanitize]}
                 />
               </div>
             </div>
@@ -294,14 +322,12 @@ const ChatTester = () => {
               ></div>
             </div>
             <div className="text-xs italic text-gray-500">Plan: {tier}</div>
-            {!isOverLimit && (
-              <button
-                onClick={() => setShowPricing(true)}
-                className="mt-3 bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-4 py-2 rounded hover:from-purple-600 hover:to-indigo-700 transition"
-              >
-                💳 Upgrade Plan
-              </button>
-            )}
+            <button
+              onClick={() => setShowPricing(true)}
+              className="mt-3 bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-4 py-2 rounded hover:from-purple-600 hover:to-indigo-700 transition"
+            >
+              💳 Upgrade Plan
+            </button>
           </div>
         </>
       )}

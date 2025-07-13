@@ -1,6 +1,12 @@
 import { auth, db } from "../firebase";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
+import {
+  doc,
+  setDoc,
+  Timestamp,
+  collection,
+  addDoc,
+} from "firebase/firestore";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -14,15 +20,26 @@ export default function Signup() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
       const user = userCredential.user;
 
-      // ✅ Save email & UID to Firestore
+      // ✅ Step 1: Create a new company for this user
+      const companyRef = await addDoc(collection(db, "companies"), {
+        name: email.split("@")[0] + "'s Company", // or ask user for name later
+        tier: "free",
+        tokensUsedToday: 0,
+        lastReset: Timestamp.now(),
+        createdBy: user.uid,
+      });
+
+      const companyId = companyRef.id;
+
+      // ✅ Step 2: Create the user document and link the company
       const userRef = doc(db, "users", user.uid);
       await setDoc(userRef, {
         email: user.email,
         role: "user",
-        tier: "free",
+        companyId: companyId,
       });
-      console.log(`✅ User created: ${user.uid}`);
 
+      console.log(`✅ User created: ${user.uid}, linked to company ${companyId}`);
       navigate("/");
     } catch (e) {
       alert(e.message);

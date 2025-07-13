@@ -1,14 +1,33 @@
 import React, { useEffect, useState, useContext } from "react";
 import { db } from "../firebase";
-import { collection, getDocs, doc, updateDoc, Timestamp } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  doc,
+  updateDoc,
+  Timestamp,
+} from "firebase/firestore";
 import { AuthContext } from "../context/AuthProvider";
 import { useNavigate } from "react-router-dom";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import jsPDF from "jspdf";
-import "jspdf-autotable";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { FaDownload, FaSearch, FaArrowLeft, FaArrowRight } from "react-icons/fa";
+import autoTable from "jspdf-autotable";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
+import {
+  FaDownload,
+  FaSearch,
+  FaArrowLeft,
+  FaArrowRight,
+} from "react-icons/fa";
 import { MdOutlineFilterAlt } from "react-icons/md";
 
 export default function AdminDashboard() {
@@ -23,47 +42,63 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const rowsPerPage = 10;
   const [page, setPage] = useState(1);
+  const [companies, setCompanies] = useState([]);
 
   useEffect(() => {
     if (!user || role !== "admin") navigate("/");
   }, [user, role, navigate]);
 
   useEffect(() => {
-    const fetchUsage = async () => {
-      const usageSnap = await getDocs(collection(db, "usage"));
-      const userSnap = await getDocs(collection(db, "users"));
+    const fetchAllData = async () => {
+      const [usageSnap, userSnap, companySnap] = await Promise.all([
+        getDocs(collection(db, "usage")),
+        getDocs(collection(db, "users")),
+        getDocs(collection(db, "companies")),
+      ]);
 
       const userMap = {};
       userSnap.forEach((doc) => {
         userMap[doc.id] = doc.data();
       });
 
-      const data = usageSnap.docs.map((doc) => {
-        const usage = doc.data();
-        const userMeta = userMap[doc.id] || {};
-        return {
-          userId: doc.id,
-          tokensUsed: usage.tokensUsed || 0,
-          lastReset: usage.lastReset,
-          email: userMeta.email || "N/A",
-          tier: userMeta.tier || "free",
-        };
+      const companyMap = {};
+      companySnap.forEach((doc) => {
+        companyMap[doc.id] = doc.data();
       });
+
+      const data = userSnap.docs.map((doc) => {
+      const user = doc.data();
+      const companyId = user.companyId || null;
+      const company = companyId ? companyMap[companyId] : null;
+
+      return {
+        userId: doc.id,
+        email: user.email || "N/A",
+        tier: company?.tier || "free",
+        tokensUsed: company?.tokensUsedToday || 0,
+        lastReset: company?.lastReset || null,
+        companyId,
+        companyName: company?.name || "No Company",
+        companyUsage: company?.tokensUsedToday || 0,
+      };
+    });
 
       setUsageData(data);
       setFilteredData(data);
+      setCompanies(Object.values(companyMap));
     };
 
-    fetchUsage();
+    fetchAllData();
   }, []);
 
   useEffect(() => {
     let filtered = [...usageData];
 
     if (searchTerm) {
-      filtered = filtered.filter((u) =>
-        u.userId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        u.email.toLowerCase().includes(searchTerm.toLowerCase())
+      filtered = filtered.filter(
+        (u) =>
+          u.userId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          u.email.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -95,23 +130,31 @@ export default function AdminDashboard() {
     );
   };
 
-  const resetTokens = async (userId) => {
-    const usageRef = doc(db, "usage", userId);
-    await updateDoc(usageRef, { tokensUsed: 0, lastReset: Timestamp.now() });
+  const resetTokens = async (companyId) => {
+    const companyRef = doc(db, "companies", companyId);
+    await updateDoc(companyRef, {
+      tokensUsedToday: 0,
+      lastReset: Timestamp.now(),
+    });
+
     setUsageData((prev) =>
-      prev.map((u) => (u.userId === userId ? { ...u, tokensUsed: 0 } : u))
+      prev.map((u) =>
+        u.companyId === companyId ? { ...u, tokensUsed: 0, lastReset: Timestamp.now() } : u
+      )
     );
   };
 
   const exportCSV = () => {
     const rows = [
-      ["User ID", "Email", "Tier", "Tokens Used", "Last Reset"],
+      ["User ID", "Email", "Tier", "Tokens Used", "Last Reset", "Company", "Company Usage"],
       ...filteredData.map((u) => [
         u.userId,
         u.email,
         u.tier,
         u.tokensUsed,
         u.lastReset?.toDate?.().toDateString?.() || "N/A",
+        u.companyName || "None",
+        u.companyUsage || 0,
       ]),
     ];
     const csv = rows.map((r) => r.join(",")).join("\n");
@@ -123,21 +166,30 @@ export default function AdminDashboard() {
   };
 
   const exportPDF = () => {
-    const doc = new jsPDF();
-    doc.setFontSize(18);
-    doc.text("📊 AI Chatbot Usage Report", 14, 20);
-    doc.setFontSize(12);
-    doc.text(`Exported on ${new Date().toDateString()}`, 14, 28);
-    const tableColumn = ["User ID", "Email", "Tier", "Tokens Used", "Last Reset"];
+    const docPDF = new jsPDF();
+    docPDF.setFontSize(18);
+    docPDF.text("📊 AI Chatbot Usage Report", 14, 20);
+    docPDF.setFontSize(12);
+    docPDF.text(`Exported on ${new Date().toDateString()}`, 14, 28);
+
+    const tableColumn = ["User ID", "Email", "Tier", "Tokens", "Last Reset", "Company", "Company Tokens"];
     const tableRows = filteredData.map((u) => [
       u.userId,
       u.email,
       u.tier,
       u.tokensUsed,
       u.lastReset?.toDate?.().toDateString?.() || "N/A",
+      u.companyName || "None",
+      u.companyUsage || 0,
     ]);
-    doc.autoTable({ head: [tableColumn], body: tableRows, startY: 35 });
-    doc.save("user_usage_report.pdf");
+
+    autoTable(docPDF, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: 35,
+    });
+
+    docPDF.save("user_usage_report.pdf");
   };
 
   const paginated = filteredData.slice((page - 1) * rowsPerPage, page * rowsPerPage);
@@ -184,35 +236,30 @@ export default function AdminDashboard() {
       </div>
 
       <div className="flex flex-wrap gap-3 justify-end mb-6">
-        <div className="flex flex-wrap gap-3 justify-end mb-6">
-          <button
-            onClick={() => navigate("/admin/leads")}
-            className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2 rounded-full hover:bg-indigo-700 transition"
-          >
-            📥 View Leads
-          </button>
-          <button
-            onClick={() => navigate("/admin/settings")}
-            className="flex items-center gap-2 bg-purple-600 text-white px-5 py-2 rounded-full hover:bg-purple-700 transition"
-          >
-            ⚙️ Bot Settings
-          </button>
-
-          <button
-            onClick={exportCSV}
-            className="flex items-center gap-2 bg-green-600 text-white px-5 py-2 rounded-full hover:bg-green-700 transition"
-          >
-            <FaDownload /> CSV
-          </button>
-
-          <button
-            onClick={exportPDF}
-            className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2 rounded-full hover:bg-blue-700 transition"
-          >
-            <FaDownload /> PDF
-          </button>
-        </div>
-
+        <button
+          onClick={() => navigate("/admin/leads")}
+          className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2 rounded-full hover:bg-indigo-700 transition"
+        >
+          📥 View Leads
+        </button>
+        <button
+          onClick={() => navigate("/admin/settings")}
+          className="flex items-center gap-2 bg-purple-600 text-white px-5 py-2 rounded-full hover:bg-purple-700 transition"
+        >
+          ⚙️ Bot Settings
+        </button>
+        <button
+          onClick={exportCSV}
+          className="flex items-center gap-2 bg-green-600 text-white px-5 py-2 rounded-full hover:bg-green-700 transition"
+        >
+          <FaDownload /> CSV
+        </button>
+        <button
+          onClick={exportPDF}
+          className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2 rounded-full hover:bg-blue-700 transition"
+        >
+          <FaDownload /> PDF
+        </button>
       </div>
 
       <div className="bg-white p-4 rounded-lg shadow-xl mb-10">
@@ -236,6 +283,8 @@ export default function AdminDashboard() {
               <th className="px-4 py-3">Email</th>
               <th className="px-4 py-3">Plan</th>
               <th className="px-4 py-3">Tokens Used</th>
+              <th className="px-4 py-3">Company</th>
+              <th className="px-4 py-3">Company Tokens</th>
               <th className="px-4 py-3">Last Reset</th>
               <th className="px-4 py-3">Actions</th>
             </tr>
@@ -257,12 +306,16 @@ export default function AdminDashboard() {
                   </select>
                 </td>
                 <td className="px-4 py-2">{u.tokensUsed}</td>
+                <td className="px-4 py-2">{u.companyName}</td>
+                <td className="px-4 py-2">{u.companyUsage}</td>
                 <td className="px-4 py-2">{u.lastReset?.toDate?.().toDateString?.() || "N/A"}</td>
                 <td className="px-4 py-2">
                   <button
-                    onClick={() => resetTokens(u.userId)}
+                    onClick={() => resetTokens(u.companyId)}
                     className="text-xs bg-red-500 text-white px-2 py-1 rounded-full hover:bg-red-600 transition"
-                  >Reset</button>
+                  >
+                    Reset
+                  </button>
                 </td>
               </tr>
             ))}
@@ -274,13 +327,19 @@ export default function AdminDashboard() {
             disabled={page === 1}
             onClick={() => setPage((p) => p - 1)}
             className="flex items-center gap-2 px-4 py-2 bg-gray-200 rounded-full hover:bg-gray-300 disabled:opacity-50"
-          ><FaArrowLeft /> Prev</button>
-          <span className="text-sm text-gray-600">Page {page} of {totalPages}</span>
+          >
+            <FaArrowLeft /> Prev
+          </button>
+          <span className="text-sm text-gray-600">
+            Page {page} of {totalPages}
+          </span>
           <button
             disabled={page === totalPages}
             onClick={() => setPage((p) => p + 1)}
             className="flex items-center gap-2 px-4 py-2 bg-gray-200 rounded-full hover:bg-gray-300 disabled:opacity-50"
-          >Next <FaArrowRight /></button>
+          >
+            Next <FaArrowRight />
+          </button>
         </div>
       </div>
     </div>
