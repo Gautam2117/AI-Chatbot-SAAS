@@ -198,6 +198,30 @@
         })
       });
 
+      if (res.status === 403) {
+        const errorData = await res.json();
+        messagesDiv.removeChild(typingMsg);
+
+        appendMessage('Bot', `
+          🙏 <strong>We're currently unavailable</strong><br>
+          Thank you for reaching out. The support team using this chatbot has reached their daily usage limit.<br><br>
+          Please try again later or contact the business directly for assistance.<br><br>
+          We apologize for the inconvenience and appreciate your patience.
+        `);
+
+        // Disable input field and button
+        inputField.disabled = true;
+        sendBtn.disabled = true;
+        sendBtn.style.cursor = 'not-allowed';
+        inputField.placeholder = 'Support is currently unavailable.';
+
+        // 🔽 This dims the entire chat UI and blocks further interaction
+        container.style.opacity = '0.6';
+        container.style.pointerEvents = 'none';
+
+        return;
+      }
+
       const reader = res.body.getReader();
       const decoder = new TextDecoder('utf-8');
       let accumulatedText = '';
