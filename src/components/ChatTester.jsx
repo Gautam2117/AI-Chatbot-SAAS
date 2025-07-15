@@ -37,20 +37,24 @@ const ChatTester = () => {
   useEffect(() => {
     if (!user?.uid) return;
 
+    let unsubscribeUsage = null;
+    let unsubscribeFAQ = null;
+
     const fetchUserCompany = async () => {
-      const userRef = doc(db, "users", user.uid);
-      const userSnap = await getDoc(userRef);
-      const userData = userSnap.data();
-      
-      if (!userData?.companyId) {
-        console.warn("⚠️ No companyId found for user.");
-        return;
-      }
+      try {
+        const userRef = doc(db, "users", user.uid);
+        const userSnap = await getDoc(userRef);
+        const userData = userSnap.data();
 
-      const usageRef = doc(db, "companies", userData.companyId);
-      const faqCollection = collection(db, "faqs", userData.companyId, "list");
+        if (!userData?.companyId) {
+          console.warn("⚠️ No companyId found for user.");
+          return;
+        }
 
-      const fetchTier = async () => {
+        const usageRef = doc(db, "companies", userData.companyId);
+        const faqCollection = collection(db, "faqs", userData.companyId, "list");
+
+        // Fetch and set tier + daily limit
         try {
           const companySnap = await getDoc(usageRef);
           const companyData = companySnap.exists() ? companySnap.data() : null;
@@ -58,54 +62,53 @@ const ChatTester = () => {
 
           setTier(companyTier);
           setDailyLimit(
-            companyTier === "pro"
-              ? 5000
-              : companyTier === "unlimited"
-              ? 999999
-              : 1000
+            companyTier === "pro" ? 5000 :
+            companyTier === "unlimited" ? 999999 : 1000
           );
         } catch (err) {
           console.error("❌ Error fetching tier:", err.message);
           setTier("free");
           setDailyLimit(1000);
         }
-      };
 
-      await fetchTier();
-
-      const unsubscribeUsage = onSnapshot(
-        usageRef,
-        (snapshot) => {
-          if (snapshot.exists()) {
-            const data = snapshot.data();
-            const today = new Date().toDateString();
-            const lastReset = data.lastReset?.toDate().toDateString?.();
-            setTokensUsed(lastReset === today ? data.tokensUsedToday : 0);
+        // Subscribe to usage snapshot
+        unsubscribeUsage = onSnapshot(
+          usageRef,
+          (snapshot) => {
+            if (snapshot.exists()) {
+              const data = snapshot.data();
+              const today = new Date().toDateString();
+              const lastReset = data.lastReset?.toDate().toDateString?.();
+              setTokensUsed(lastReset === today ? data.tokensUsedToday : 0);
+            }
+          },
+          (error) => {
+            console.error("❌ Error with usage snapshot:", error.message);
           }
-        },
-        (error) => {
-          console.error("❌ Error with usage snapshot:", error.message);
-        }
-      );
+        );
 
-      const unsubscribeFAQ = onSnapshot(
-        faqCollection,
-        (snapshot) => {
-          const updatedFaqs = snapshot.docs.map((doc) => doc.data());
-          setFaqs(updatedFaqs);
-        },
-        (error) => {
-          console.error("❌ Error with FAQ snapshot:", error.message);
-        }
-      );
-
-      return () => {
-        unsubscribeUsage();
-        unsubscribeFAQ();
-      };
+        // Subscribe to FAQ snapshot
+        unsubscribeFAQ = onSnapshot(
+          faqCollection,
+          (snapshot) => {
+            const updatedFaqs = snapshot.docs.map((doc) => doc.data());
+            setFaqs(updatedFaqs);
+          },
+          (error) => {
+            console.error("❌ Error with FAQ snapshot:", error.message);
+          }
+        );
+      } catch (err) {
+        console.error("❌ Error in fetchUserCompany:", err.message);
+      }
     };
 
     fetchUserCompany();
+
+    return () => {
+      if (unsubscribeUsage) unsubscribeUsage();
+      if (unsubscribeFAQ) unsubscribeFAQ();
+    };
   }, [user?.uid]);
 
   const testChat = async () => {
@@ -125,12 +128,18 @@ const ChatTester = () => {
           "Content-Type": "application/json",
           "x-user-id": user.uid,
         },
-        body: JSON.stringify({ question: userQ }),
+        body: JSON.stringify({ question: userQ, faqs }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
         setBotAnswer(errorData.error || "Something went wrong.");
+        setLoading(false);
+        return;
+      }
+
+      if (!response.body) {
+        setBotAnswer("⚠️ Streaming not supported by this browser.");
         setLoading(false);
         return;
       }

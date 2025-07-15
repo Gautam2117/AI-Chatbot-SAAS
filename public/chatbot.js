@@ -285,4 +285,31 @@
 
   // Welcome message on load
   appendMessage('Bot', t('welcome'));
+
+  (async () => {
+    try {
+      const res = await fetch(`${BASE_URL}/api/usage-status`, {
+        method: 'GET',
+        headers: { 'x-user-id': userId }
+      });
+      const data = await res.json();
+
+      if (data.blocked) {
+        appendMessage('Bot', `
+          🚫 <strong>Chat temporarily unavailable</strong><br>
+          Our support team has reached its daily limit for today.<br><br>
+          Please try again later or contact us directly.
+        `);
+        inputField.disabled = true;
+        sendBtn.disabled = true;
+        sendBtn.style.cursor = 'not-allowed';
+        inputField.placeholder = 'Support is currently unavailable.';
+        container.style.opacity = '0.6';
+        container.style.pointerEvents = 'none';
+      }
+    } catch (err) {
+      console.error("❌ Failed to check usage status:", err);
+    }
+  })();
+
 })();
