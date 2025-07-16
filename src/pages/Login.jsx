@@ -14,6 +14,7 @@ export default function Login() {
   const [pass, setPass] = useState("");
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
+  const [googleLoginLoading, setGoogleLoginLoading] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -30,10 +31,17 @@ export default function Login() {
   };
 
   const loginWithGoogle = async () => {
+    if (googleLoginLoading) return; // ⛔ prevent double clicks
+
     try {
+      setGoogleLoginLoading(true);
       await signInWithPopup(auth, new GoogleAuthProvider());
     } catch (e) {
-      alert(e.message);
+      if (e.code !== "auth/cancelled-popup-request") {
+        alert(e.message);
+      }
+    } finally {
+      setGoogleLoginLoading(false);
     }
   };
 
