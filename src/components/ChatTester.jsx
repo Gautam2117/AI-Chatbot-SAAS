@@ -53,9 +53,11 @@ const ChatTester = () => {
           return;
         }
 
-        const faqCollection = collection(db, "faqs", userData.companyId, "list");
+        const companyId = userData.companyId;
+        const faqCollection = collection(db, "faqs", companyId, "list");
+        const usageRef = doc(db, "companies", companyId);
 
-        // ✅ Fetch usage + tier + expiry info from backend
+        // ✅ Fetch usage + tier + expiry info from backend (initial load)
         try {
           const res = await axios.get(`${BASE_URL}/api/usage-status`, {
             headers: { "x-user-id": user.uid },
@@ -66,16 +68,13 @@ const ChatTester = () => {
           setTokensUsed(usage);
           setDailyLimit(limit);
 
-          // 🏷️ Infer tier from limit
-          const inferredTier = limit === 1000
-            ? "free"
-            : limit === 5000
-            ? "pro"
-            : "unlimited";
+          const inferredTier =
+            limit === 1000 ? "free" :
+            limit === 5000 ? "pro" : "unlimited";
 
           setTier(inferredTier);
 
-          // ⏰ Check if subscription is expiring soon (within 5 days)
+          // ⏰ Subscription expiry warning
           if (subscriptionExpiresAt) {
             const expiryDate = new Date(subscriptionExpiresAt._seconds * 1000);
             const today = new Date();
@@ -86,18 +85,40 @@ const ChatTester = () => {
             } else if (daysLeft <= 0) {
               setSubscriptionExpiryWarning("⚠️ Your subscription has expired.");
             } else {
-              setSubscriptionExpiryWarning(""); // Clear any old warning
+              setSubscriptionExpiryWarning("");
             }
           } else {
-            setSubscriptionExpiryWarning(""); // No expiry set
+            setSubscriptionExpiryWarning("");
           }
         } catch (err) {
           console.error("❌ Error fetching usage status from backend:", err.message);
           setTokensUsed(0);
           setDailyLimit(1000);
           setTier("free");
-          setSubscriptionExpiryWarning(""); // Safe fallback
+          setSubscriptionExpiryWarning("");
         }
+
+        // ✅ Subscribe to real-time token usage updates
+        unsubscribeUsage = onSnapshot(usageRef, (snapshot) => {
+          if (snapshot.exists()) {
+            const data = snapshot.data();
+            const today = new Date().toDateString();
+            const lastReset = data.lastReset?.toDate()?.toDateString?.();
+
+            const isToday = lastReset === today;
+            setTokensUsed(isToday ? data.tokensUsedToday || 0 : 0);
+
+            const updatedTier = data.tier || "free";
+            const updatedLimit =
+              updatedTier === "pro" ? 5000 :
+              updatedTier === "unlimited" ? Infinity : 1000;
+
+            setTier(updatedTier);
+            setDailyLimit(updatedLimit);
+          }
+        }, (error) => {
+          console.error("❌ Error with usage snapshot:", error.message);
+        });
 
         // ✅ Subscribe to FAQs
         unsubscribeFAQ = onSnapshot(
@@ -110,6 +131,7 @@ const ChatTester = () => {
             console.error("❌ Error with FAQ snapshot:", error.message);
           }
         );
+
       } catch (err) {
         console.error("❌ Error in fetchUserCompany:", err.message);
       }
