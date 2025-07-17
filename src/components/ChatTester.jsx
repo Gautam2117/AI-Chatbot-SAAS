@@ -239,10 +239,6 @@ const ChatTester = () => {
 
             if (verifyRes.data.success) {
               alert("✅ Payment Verified! Upgrading...");
-              await axios.post(`${BASE_URL}/api/upgrade-tier`, {
-                userId: user.uid,
-                plan,
-              });
               setTier(plan);
               setShowPricing(false);
               navigate("/payment-success", {
