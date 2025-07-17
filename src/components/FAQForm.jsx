@@ -51,6 +51,18 @@ const FAQForm = ({ faqs, setFaqs }) => {
 
   const addFAQ = async () => {
     if (!user?.uid) return alert("🔒 Please log in.");
+
+    const isDuplicate = faqs.some(
+      (f) =>
+        f.q.toLowerCase().trim() === question.toLowerCase().trim() &&
+        f.a.toLowerCase().trim() === answer.toLowerCase().trim()
+    );
+
+    if (isDuplicate) {
+      alert("❌ Duplicate FAQ already exists.");
+      return;
+    }
+
     if (question.trim() && answer.trim()) {
       try {
         setIsSaving(true);
@@ -86,8 +98,8 @@ const FAQForm = ({ faqs, setFaqs }) => {
     try {
       setIsSaving(true);
       await updateDoc(doc(db, "faqs", user.companyId, "list", editId), {
-        q: DOMPurify.sanitize(editQuestion),
-        a: DOMPurify.sanitize(editAnswer),
+        q: DOMPurify.sanitize(editQuestion.trim()),
+        a: DOMPurify.sanitize(editAnswer.trim()),
         updatedAt: serverTimestamp(),
       });
       cancelEdit();
@@ -184,24 +196,35 @@ const FAQForm = ({ faqs, setFaqs }) => {
         const totalRows = rows.length;
         let processed = 0;
 
-        const promises = rows.map(async (row) => {
-          const question = row["Question"]?.trim();
-          const answer = row["Answer"]?.trim();
-          if (question && answer) {
+        rows.sort((a, b) => a.Question?.localeCompare(b.Question));
+
+        try {
+          for (const row of rows) {
+            const question = row["Question"]?.trim();
+            const answer = row["Answer"]?.trim();
+
+            if (!question || !answer) continue;
+
+            const isDuplicate = faqs.some(
+              (f) =>
+                f.q.toLowerCase().trim() === question.toLowerCase() &&
+                f.a.toLowerCase().trim() === answer.toLowerCase()
+            );
+
+            if (isDuplicate) continue;
+
             await addDoc(collection(db, "faqs", user.companyId, "list"), {
               q: DOMPurify.sanitize(question),
               a: DOMPurify.sanitize(answer),
               createdAt: serverTimestamp(),
             });
-          }
-          processed++;
-          setImportProgress(Math.round((processed / totalRows) * 100));
-        });
 
-        try {
-          await Promise.all(promises);
+            processed++;
+            setImportProgress(Math.round((processed / totalRows) * 100));
+          }
+
           alert("✅ FAQs imported successfully!");
-          setImportProgress(100); // Complete
+          setImportProgress(100);
         } catch (err) {
           console.error("❌ Error importing FAQs:", err.message);
           alert("❌ Failed to import some FAQs.");
@@ -271,7 +294,12 @@ const FAQForm = ({ faqs, setFaqs }) => {
                       </div>
                     </div>
                   ) : (
-                    <p className="text-indigo-700 mt-2">A: {faq.a}</p>
+                    <>
+                      <p className="text-indigo-700 mt-2">A: {faq.a}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Created: {faq.createdAt?.toDate()?.toLocaleString() || "N/A"}
+                      </p>
+                    </>
                   )}
                   {editId !== faq.id && (
                     <div className="flex gap-2 mt-2">

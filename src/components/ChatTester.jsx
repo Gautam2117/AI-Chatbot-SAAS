@@ -26,6 +26,8 @@ const ChatTester = () => {
   const [dailyLimit, setDailyLimit] = useState(1000);
   const [tier, setTier] = useState("free");
   const [showPricing, setShowPricing] = useState(false);
+  const [subscriptionExpiryWarning, setSubscriptionExpiryWarning] = useState("");
+
   const navigate = useNavigate();
 
   const BASE_URL =
@@ -51,43 +53,53 @@ const ChatTester = () => {
           return;
         }
 
-        const usageRef = doc(db, "companies", userData.companyId);
         const faqCollection = collection(db, "faqs", userData.companyId, "list");
 
-        // Fetch and set tier + daily limit
+        // ✅ Fetch usage + tier + expiry info from backend
         try {
-          const companySnap = await getDoc(usageRef);
-          const companyData = companySnap.exists() ? companySnap.data() : null;
-          const companyTier = companyData?.tier || "free";
+          const res = await axios.get(`${BASE_URL}/api/usage-status`, {
+            headers: { "x-user-id": user.uid },
+          });
 
-          setTier(companyTier);
-          setDailyLimit(
-            companyTier === "pro" ? 5000 :
-            companyTier === "unlimited" ? 999999 : 1000
-          );
+          const { usage, limit, subscriptionExpiresAt } = res.data;
+
+          setTokensUsed(usage);
+          setDailyLimit(limit);
+
+          // 🏷️ Infer tier from limit
+          const inferredTier = limit === 1000
+            ? "free"
+            : limit === 5000
+            ? "pro"
+            : "unlimited";
+
+          setTier(inferredTier);
+
+          // ⏰ Check if subscription is expiring soon (within 5 days)
+          if (subscriptionExpiresAt) {
+            const expiryDate = new Date(subscriptionExpiresAt._seconds * 1000);
+            const today = new Date();
+            const daysLeft = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+
+            if (daysLeft <= 5 && daysLeft > 0) {
+              setSubscriptionExpiryWarning(`⚠️ Your subscription expires in ${daysLeft} day${daysLeft > 1 ? "s" : ""}.`);
+            } else if (daysLeft <= 0) {
+              setSubscriptionExpiryWarning("⚠️ Your subscription has expired.");
+            } else {
+              setSubscriptionExpiryWarning(""); // Clear any old warning
+            }
+          } else {
+            setSubscriptionExpiryWarning(""); // No expiry set
+          }
         } catch (err) {
-          console.error("❌ Error fetching tier:", err.message);
-          setTier("free");
+          console.error("❌ Error fetching usage status from backend:", err.message);
+          setTokensUsed(0);
           setDailyLimit(1000);
+          setTier("free");
+          setSubscriptionExpiryWarning(""); // Safe fallback
         }
 
-        // Subscribe to usage snapshot
-        unsubscribeUsage = onSnapshot(
-          usageRef,
-          (snapshot) => {
-            if (snapshot.exists()) {
-              const data = snapshot.data();
-              const today = new Date().toDateString();
-              const lastReset = data.lastReset?.toDate().toDateString?.();
-              setTokensUsed(lastReset === today ? data.tokensUsedToday : 0);
-            }
-          },
-          (error) => {
-            console.error("❌ Error with usage snapshot:", error.message);
-          }
-        );
-
-        // Subscribe to FAQ snapshot
+        // ✅ Subscribe to FAQs
         unsubscribeFAQ = onSnapshot(
           faqCollection,
           (snapshot) => {
@@ -260,6 +272,11 @@ const ChatTester = () => {
   return (
     <div className="bg-gradient-to-br from-white via-blue-50 to-indigo-100 rounded-3xl shadow-2xl p-6 md:p-10 space-y-6 hover:scale-[1.02] transition">
       <h2 className="text-3xl font-extrabold text-indigo-700 text-center">🤖 Test Chatbot</h2>
+      {subscriptionExpiryWarning && (
+        <div className="p-3 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 text-sm rounded text-center mt-2">
+          {subscriptionExpiryWarning}
+        </div>
+      )}
       {!user?.uid ? (
         <p className="text-red-600 text-center">🔒 Please log in to use the chatbot.</p>
       ) : (

@@ -286,6 +286,16 @@
   // Welcome message on load
   appendMessage('Bot', t('welcome'));
 
+  // Auto-followup greeting after 15s if user hasn’t responded
+  setTimeout(() => {
+    const userMessages = Array.from(messagesDiv.children).filter(el =>
+      el.classList.contains('user')
+    );
+    if (userMessages.length === 0) {
+      appendMessage('Bot', "💡 Need help with something? Just ask!");
+    }
+  }, 15000);
+
   (async () => {
     try {
       const res = await fetch(`${BASE_URL}/api/usage-status`, {
@@ -300,16 +310,66 @@
           Our support team has reached its daily limit for today.<br><br>
           Please try again later or contact us directly.
         `);
+
         inputField.disabled = true;
         sendBtn.disabled = true;
         sendBtn.style.cursor = 'not-allowed';
         inputField.placeholder = 'Support is currently unavailable.';
         container.style.opacity = '0.6';
         container.style.pointerEvents = 'none';
+        container.setAttribute('aria-disabled', 'true');
+
+        // ⛔ Visually block chat interactions
+        const overlay = document.createElement('div');
+        overlay.id = "botify-block-overlay";
+        overlay.style = `
+          position: absolute;
+          inset: 0;
+          background: rgba(255,255,255,0.7);
+          backdrop-filter: blur(2px);
+          z-index: 9999;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 14px;
+          color: #555;
+          pointer-events: none;
+        `;
+        overlay.innerHTML = "⏳ Chat unavailable. Please try again later.";
+        container.appendChild(overlay);
       }
     } catch (err) {
       console.error("❌ Failed to check usage status:", err);
     }
   })();
+
+  // Auto-reset polling every 5 minutes if blocked
+  setInterval(async () => {
+    if (inputField.disabled) {
+      try {
+        const res = await fetch(`${BASE_URL}/api/usage-status`, {
+          headers: { 'x-user-id': userId }
+        });
+        const data = await res.json();
+
+        if (!data.blocked) {
+          // Remove overlay if exists
+          const overlay = document.getElementById("botify-block-overlay");
+          if (overlay) overlay.remove();
+
+          appendMessage('Bot', '✅ Support is available again. Feel free to chat!');
+          inputField.disabled = false;
+          sendBtn.disabled = false;
+          sendBtn.style.cursor = 'pointer';
+          inputField.placeholder = t('placeholder');
+          container.style.opacity = '1';
+          container.style.pointerEvents = 'auto';
+          container.setAttribute('aria-disabled', 'false');
+        }
+      } catch (err) {
+        console.warn("❌ Auto polling failed:", err);
+      }
+    }
+  }, 300000); // 5 minutes
 
 })();
