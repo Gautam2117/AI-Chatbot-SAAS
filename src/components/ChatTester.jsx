@@ -54,34 +54,39 @@ const ChatTester = () => {
         }
 
         const companyId = userData.companyId;
-        const faqCollection = collection(db, "faqs", companyId, "list");
         const usageRef = doc(db, "companies", companyId);
+        const faqCollection = collection(db, "faqs", companyId, "list");
 
-        // ✅ Fetch usage + tier + expiry info from backend (initial load)
-        try {
-          const res = await axios.get(`${BASE_URL}/api/usage-status`, {
-            headers: { "x-user-id": user.uid },
-          });
+        // ✅ Listen to real-time usage & plan info
+        unsubscribeUsage = onSnapshot(usageRef, (snapshot) => {
+          if (!snapshot.exists()) return;
 
-          const { usage, limit, subscriptionExpiresAt } = res.data;
+          const data = snapshot.data();
 
-          setTokensUsed(usage);
-          setDailyLimit(limit);
+          // UTC-safe date handling
+          const today = new Date().toISOString().slice(0, 10);
+          const lastResetDate = data.lastReset?.toDate()?.toISOString?.().slice(0, 10);
+          const isToday = lastResetDate === today;
 
-          const inferredTier =
-            limit === 1000 ? "free" :
-            limit === 5000 ? "pro" : "unlimited";
+          setTokensUsed(isToday ? data.tokensUsedToday || 0 : 0);
 
-          setTier(inferredTier);
+          const currentTier = data.tier || "free";
+          const currentLimit =
+            currentTier === "pro" ? 5000 :
+            currentTier === "unlimited" ? Infinity : 1000;
 
-          // ⏰ Subscription expiry warning
-          if (subscriptionExpiresAt) {
-            const expiryDate = new Date(subscriptionExpiresAt._seconds * 1000);
-            const today = new Date();
-            const daysLeft = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+          setTier(currentTier);
+          setDailyLimit(currentLimit);
+
+          const expiresAt = data.subscriptionExpiresAt?.toDate?.();
+          if (expiresAt) {
+            const now = new Date();
+            const daysLeft = Math.ceil((expiresAt - now) / (1000 * 60 * 60 * 24));
 
             if (daysLeft <= 5 && daysLeft > 0) {
-              setSubscriptionExpiryWarning(`⚠️ Your subscription expires in ${daysLeft} day${daysLeft > 1 ? "s" : ""}.`);
+              setSubscriptionExpiryWarning(
+                `⚠️ Your subscription expires in ${daysLeft} day${daysLeft > 1 ? "s" : ""}.`
+              );
             } else if (daysLeft <= 0) {
               setSubscriptionExpiryWarning("⚠️ Your subscription has expired.");
             } else {
@@ -90,37 +95,11 @@ const ChatTester = () => {
           } else {
             setSubscriptionExpiryWarning("");
           }
-        } catch (err) {
-          console.error("❌ Error fetching usage status from backend:", err.message);
-          setTokensUsed(0);
-          setDailyLimit(1000);
-          setTier("free");
-          setSubscriptionExpiryWarning("");
-        }
-
-        // ✅ Subscribe to real-time token usage updates
-        unsubscribeUsage = onSnapshot(usageRef, (snapshot) => {
-          if (snapshot.exists()) {
-            const data = snapshot.data();
-            const today = new Date().toDateString();
-            const lastReset = data.lastReset?.toDate()?.toDateString?.();
-
-            const isToday = lastReset === today;
-            setTokensUsed(isToday ? data.tokensUsedToday || 0 : 0);
-
-            const updatedTier = data.tier || "free";
-            const updatedLimit =
-              updatedTier === "pro" ? 5000 :
-              updatedTier === "unlimited" ? Infinity : 1000;
-
-            setTier(updatedTier);
-            setDailyLimit(updatedLimit);
-          }
         }, (error) => {
           console.error("❌ Error with usage snapshot:", error.message);
         });
 
-        // ✅ Subscribe to FAQs
+        // ✅ Listen to FAQs
         unsubscribeFAQ = onSnapshot(
           faqCollection,
           (snapshot) => {
@@ -131,7 +110,6 @@ const ChatTester = () => {
             console.error("❌ Error with FAQ snapshot:", error.message);
           }
         );
-
       } catch (err) {
         console.error("❌ Error in fetchUserCompany:", err.message);
       }
