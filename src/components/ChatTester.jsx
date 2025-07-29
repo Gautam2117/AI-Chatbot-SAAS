@@ -71,12 +71,29 @@ const ChatTester = () => {
           setTokensUsed(isToday ? data.tokensUsedToday || 0 : 0);
 
           const currentTier = data.tier || "free";
-          const currentLimit =
-            currentTier === "pro" ? 5000 :
-            currentTier === "unlimited" ? Infinity : 1000;
+
+          let currentLimit = 1000; // default for free
+          if (currentTier === "pro") currentLimit = 10000;
+          else if (currentTier === "pro-max") currentLimit = 66000;
 
           setTier(currentTier);
           setDailyLimit(currentLimit);
+
+          if (currentTier === "pro-max") {
+            const now = new Date();
+            const currentMonth = now.getMonth();
+            const currentYear = now.getFullYear();
+            const usageMonth = data.monthlyUsageReset?.toDate?.().getMonth?.();
+            const usageYear = data.monthlyUsageReset?.toDate?.().getFullYear?.();
+
+            const tokensThisMonth = data.tokensUsedThisMonth || 0;
+            const maxMonthlyTokens = 2000000; // 2M tokens cap
+
+            const isSameMonth = usageMonth === currentMonth && usageYear === currentYear;
+            if (isSameMonth && tokensThisMonth >= maxMonthlyTokens) {
+              setDailyLimit(0); // freeze for rest of the month
+            }
+          }
 
           const expiresAt = data.subscriptionExpiresAt?.toDate?.();
           if (expiresAt) {
@@ -282,6 +299,11 @@ const ChatTester = () => {
               ❌ Token limit reached ({tokensUsed}/{dailyLimit}). Upgrade plan to continue.
             </div>
           )}
+          {tier === "pro-max" && dailyLimit === 0 && (
+            <div className="p-3 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 text-sm rounded mt-2">
+              🚫 Monthly cap reached (2M tokens). Renew next month or <a href="/contact" className="underline font-semibold">contact support</a>.
+            </div>
+          )}
           {!isOverLimit && isNearLimit && (
             <div className="p-3 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 text-sm rounded">
               ⚠️ You've used {percentUsed.toFixed(1)}% of your token limit.
@@ -347,7 +369,21 @@ const ChatTester = () => {
                 style={{ width: `${Math.min(percentUsed, 100)}%` }}
               ></div>
             </div>
-            <div className="text-xs italic text-gray-500">Plan: {tier}</div>
+            <div className="text-xs font-bold mt-1">
+              Plan:
+              <span
+                className={`ml-2 px-2 py-1 rounded-full text-xs font-bold ${
+                  tier === "pro-max"
+                    ? "bg-purple-100 text-purple-700"
+                    : tier === "pro"
+                    ? "bg-green-100 text-green-700"
+                    : "bg-gray-100 text-gray-600"
+                }`}
+              >
+                {tier === "pro-max" ? "Pro Max" : tier.charAt(0).toUpperCase() + tier.slice(1)}
+              </span>
+            </div>
+
             <button
               onClick={() => setShowPricing(true)}
               className="mt-3 bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-4 py-2 rounded hover:from-purple-600 hover:to-indigo-700 transition"
@@ -373,8 +409,8 @@ const ChatTester = () => {
             <div className="space-y-4">
               <div className="border border-indigo-300 rounded-lg p-4 hover:shadow-xl">
                 <h3 className="text-lg font-semibold text-indigo-600">Pro Plan</h3>
-                <p className="text-sm text-gray-600">📈 5,000 tokens/day</p>
-                <p className="text-indigo-700 font-bold mt-1">₹99/month</p>
+                <p className="text-sm text-gray-600">📈 10,000 tokens/day</p>
+                <p className="text-indigo-700 font-bold mt-1">₹149/month</p>
                 <button
                   onClick={() => handleCheckout("pro")}
                   className="mt-2 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition"
@@ -383,11 +419,11 @@ const ChatTester = () => {
                 </button>
               </div>
               <div className="border border-indigo-300 rounded-lg p-4 hover:shadow-xl">
-                <h3 className="text-lg font-semibold text-indigo-600">Unlimited Plan</h3>
-                <p className="text-sm text-gray-600">🌟 Unlimited tokens/day</p>
-                <p className="text-indigo-700 font-bold mt-1">₹249/month</p>
+                <h3 className="text-lg font-semibold text-indigo-600">Pro Max</h3>
+                <p className="text-sm text-gray-600">🌟 66,000 tokens/day (2M/month)</p>
+                <p className="text-indigo-700 font-bold mt-1">₹399/month</p>
                 <button
-                  onClick={() => handleCheckout("unlimited")}
+                  onClick={() => handleCheckout("pro-max")}
                   className="mt-2 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition"
                 >
                   Choose Plan

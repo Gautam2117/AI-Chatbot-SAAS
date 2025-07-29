@@ -154,8 +154,8 @@ const FAQForm = ({ faqs, setFaqs }) => {
     const rows = [["Question", "Answer", "Created At"]];
     faqs.forEach((faq) => {
       rows.push([
-        `"${faq.q}"`, // Quote to handle commas
-        `"${faq.a}"`,
+        `"${faq.q.replace(/"/g, '""')}"`,
+        `"${faq.a.replace(/"/g, '""')}"`,
         faq.createdAt?.toDate?.().toLocaleString() || "N/A",
       ]);
     });
@@ -195,6 +195,7 @@ const FAQForm = ({ faqs, setFaqs }) => {
         const rows = results.data;
         const totalRows = rows.length;
         let processed = 0;
+        let skipped = 0;
 
         rows.sort((a, b) => a.Question?.localeCompare(b.Question));
 
@@ -211,7 +212,10 @@ const FAQForm = ({ faqs, setFaqs }) => {
                 f.a.toLowerCase().trim() === answer.toLowerCase()
             );
 
-            if (isDuplicate) continue;
+            if (isDuplicate) {
+              skipped++;
+              continue;
+            }
 
             await addDoc(collection(db, "faqs", user.companyId, "list"), {
               q: DOMPurify.sanitize(question),
@@ -223,7 +227,7 @@ const FAQForm = ({ faqs, setFaqs }) => {
             setImportProgress(Math.round((processed / totalRows) * 100));
           }
 
-          alert("✅ FAQs imported successfully!");
+          alert(`✅ Imported ${processed} FAQs. Skipped ${skipped} duplicate(s).`);
           setImportProgress(100);
         } catch (err) {
           console.error("❌ Error importing FAQs:", err.message);
@@ -248,14 +252,24 @@ const FAQForm = ({ faqs, setFaqs }) => {
             setCurrentPage(1);
           }}
         />
-        <select
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value)}
-          className="border px-4 py-2 rounded-lg"
-        >
-          <option value="date">Sort by Date</option>
-          <option value="question">Sort by Question</option>
-        </select>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setSortBy("date")}
+            className={`px-3 py-1 rounded-lg text-sm font-semibold transition ${
+              sortBy === "date" ? "bg-indigo-600 text-white" : "bg-white border border-indigo-300"
+            }`}
+          >
+            📅 Date
+          </button>
+          <button
+            onClick={() => setSortBy("question")}
+            className={`px-3 py-1 rounded-lg text-sm font-semibold transition ${
+              sortBy === "question" ? "bg-indigo-600 text-white" : "bg-white border border-indigo-300"
+            }`}
+          >
+            🔤 A-Z
+          </button>
+        </div>
         <div className="flex gap-2">
           <button onClick={exportToCSV} className="bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700">⬇️ CSV</button>
           <button onClick={exportToPDF} className="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700">📄 PDF</button>
@@ -303,8 +317,20 @@ const FAQForm = ({ faqs, setFaqs }) => {
                   )}
                   {editId !== faq.id && (
                     <div className="flex gap-2 mt-2">
-                      <button onClick={() => startEdit(faq)} className="bg-yellow-500 text-white px-3 py-1 rounded-lg">✏️ Edit</button>
-                      <button onClick={() => confirmDelete(faq.id)} className="bg-red-600 text-white px-3 py-1 rounded-lg">🗑️ Delete</button>
+                      <button
+                        onClick={() => startEdit(faq)}
+                        className="bg-yellow-500 text-white px-3 py-1 rounded-lg"
+                        title="Edit FAQ"
+                      >
+                        ✏️ Edit
+                      </button>
+                      <button
+                        onClick={() => confirmDelete(faq.id)}
+                        className="bg-red-600 text-white px-3 py-1 rounded-lg"
+                        title="Delete FAQ"
+                      >
+                        🗑️ Delete
+                      </button>
                     </div>
                   )}
                 </>

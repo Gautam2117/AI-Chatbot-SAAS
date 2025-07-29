@@ -103,7 +103,7 @@ export default function AdminDashboard() {
     }
 
     if (onlyPaid) {
-      filtered = filtered.filter((u) => u.tier !== "free");
+      filtered = filtered.filter((u) => u.tier && u.tier !== "free");
     }
 
     if (startDate && endDate) {
@@ -149,8 +149,8 @@ export default function AdminDashboard() {
       ["User ID", "Email", "Tier", "Tokens Used", "Last Reset", "Company", "Company Usage"],
       ...filteredData.map((u) => [
         u.userId,
-        u.email,
-        u.tier,
+        `"${u.email.replace(/"/g, '""')}"`,
+        `"${u.tier.replace(/"/g, '""')}"`,
         u.tokensUsed,
         u.lastReset?.toDate?.().toDateString?.() || "N/A",
         u.companyName || "None",
@@ -294,6 +294,14 @@ export default function AdminDashboard() {
               <tr key={u.userId} className={`border-t ${u.tokensUsed > 1000 ? "bg-yellow-50" : ""}`}>
                 <td className="px-4 py-2 font-mono text-xs text-gray-600">{u.userId}</td>
                 <td className="px-4 py-2">{u.email}</td>
+                <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                  u.tier === "pro-max" ? "bg-purple-100 text-purple-700" :
+                  u.tier === "pro" ? "bg-green-100 text-green-700" :
+                  "bg-gray-100 text-gray-600"
+                }`}>
+                  {u.tier === "pro-max" ? "Pro Max" : u.tier.charAt(0).toUpperCase() + u.tier.slice(1)}
+                </span>
+
                 <td className="px-4 py-2">
                   <select
                     value={u.tier}
@@ -302,7 +310,7 @@ export default function AdminDashboard() {
                   >
                     <option value="free">Free</option>
                     <option value="pro">Pro</option>
-                    <option value="unlimited">Unlimited</option>
+                    <option value="pro-max">Pro Max</option>
                   </select>
                 </td>
                 <td className="px-4 py-2">{u.tokensUsed}</td>

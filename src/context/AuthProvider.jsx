@@ -1,10 +1,9 @@
 import { createContext, useEffect, useState } from "react";
 import { auth, db } from "../firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, Timestamp, collection, addDoc } from "firebase/firestore";
 import Lottie from "react-lottie-player";
 import loaderAnimation from "../assets/loader.json";
-import { addDoc, collection } from "firebase/firestore";
 
 export const AuthContext = createContext();
 
@@ -28,6 +27,7 @@ export const AuthProvider = ({ children }) => {
             name: firebaseUser.displayName || firebaseUser.email.split("@")[0] + "'s Company",
             tier: "free",
             tokensUsedToday: 0,
+            tokensUsedMonth: 0, // ✅ Added field
             lastReset: Timestamp.now(),
             createdBy: firebaseUser.uid,
           });
