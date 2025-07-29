@@ -423,7 +423,7 @@ const ChatTester = () => {
                 <p className="text-sm text-gray-600">🌟 66,000 tokens/day (2M/month)</p>
                 <p className="text-indigo-700 font-bold mt-1">₹399/month</p>
                 <button
-                  onClick={() => handleCheckout("pro-max")}
+                  onClick={() => handleCheckout("pro_max")}
                   className="mt-2 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition"
                 >
                   Choose Plan
