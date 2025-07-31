@@ -7,31 +7,36 @@ service cloud.firestore {
     function isOwner(uid) { return request.auth != null && request.auth.uid == uid; }
     function isAdmin() { return request.auth != null && request.auth.token.role == 'admin'; }
 
-    // USERS (self or admin). Allow even if not active so they can complete verification.
+    // USERS – allow self access even before activation (to complete verification)
     match /users/{uid} {
       allow read: if isSignedIn() && (isOwner(uid) || isAdmin());
       allow write: if isSignedIn() && (isOwner(uid) || isAdmin());
     }
 
-    // COMPANIES (read requires active; write only admin)
+    // COMPANIES
     match /companies/{companyId} {
+      // allow initial create by the user creating their own company
+      allow create: if isSignedIn()
+                    && request.resource.data.createdBy == request.auth.uid;
+
+      // reads require an active account
       allow read: if isSignedIn() && isActive();
-      allow write: if isAdmin();
+
+      // updates/deletes restricted to admins
+      allow update, delete: if isAdmin();
     }
 
-    // USAGE (only owner, and must be active)
+    // USAGE – owner only & must be active
     match /usage/{uid} {
       allow read, write: if isOwner(uid) && isActive();
     }
 
-    // FAQ root doc per company (metadata)
+    // FAQ root doc per company
     match /faqs/{companyId} {
       allow read, write: if (isSignedIn() && isActive() &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == companyId)
         || isAdmin();
     }
-
-    // FAQ list subcollection per company
     match /faqs/{companyId}/list/{faqId} {
       allow read, write: if (isSignedIn() && isActive() &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == companyId)
@@ -48,7 +53,6 @@ service cloud.firestore {
       allow read, write: if isSignedIn() && isAdmin();
     }
 
-    // DEFAULT DENY
     match /{document=**} {
       allow read, write: if false;
     }
