@@ -1,21 +1,32 @@
 // MainContent.jsx
 import React, { useState, useContext, useEffect } from "react";
-import { Navigate, useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import FAQForm from "./components/FAQForm";
 import ChatTester from "./components/ChatTester";
 import { AuthContext } from "./context/AuthProvider";
 import { signOut } from "firebase/auth";
-import { auth } from "./firebase";
+import { auth, db } from "./firebase";
+import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
 import botifyLogo from "./assets/Botify_logo.png";
 
 export function MainContent() {
   const [faqs, setFaqs] = useState([]);
   const { user, role, loading } = useContext(AuthContext);
-  const navigate = useNavigate();
 
+  // Ensure usage doc exists only after user is verified + active
   useEffect(() => {
-    if (!user) navigate("/login");
-  }, [user, navigate]);
+    (async () => {
+      if (loading) return;
+      if (!user) return;
+      if (!user.emailVerified || user.active !== true) return;
+
+      const usageRef = doc(db, "usage", user.uid);
+      const snap = await getDoc(usageRef);
+      if (!snap.exists()) {
+        await setDoc(usageRef, { tokensUsed: 0, lastReset: Timestamp.now() });
+      }
+    })();
+  }, [loading, user]);
 
   if (loading) {
     return (
@@ -25,9 +36,10 @@ export function MainContent() {
     );
   }
 
-  if (!user) return <Navigate to="/login" replace />;
+  // At this point, routing should already guarantee user is present & active.
+  if (!user) return null;
 
-  const isAdmin = role === "admin";
+  const isAdmin = (user?.claims?.role || role) === "admin";
 
   const handleCopy = (text, message) => {
     navigator.clipboard.writeText(text);

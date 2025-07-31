@@ -1,11 +1,12 @@
+// src/context/AuthProvider.jsx
 import { createContext, useEffect, useState } from "react";
 import { auth, db } from "../firebase";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, sendEmailVerification, getIdToken, getIdTokenResult } from "firebase/auth";
 import { doc, getDoc, setDoc, Timestamp, collection, addDoc } from "firebase/firestore";
 import Lottie from "react-lottie-player";
 import loaderAnimation from "../assets/loader.json";
 
-export const AuthContext = createContext();
+export const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -14,7 +15,16 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
+      try {
+        if (!firebaseUser) {
+          setUser(null);
+          setRole("user");
+          return;
+        }
+
+        // Ensure we have latest token (custom claims after OTP)
+        try { await getIdToken(firebaseUser, true); } catch {}
+
         const userRef = doc(db, "users", firebaseUser.uid);
         let userData;
         const userSnap = await getDoc(userRef);
@@ -22,58 +32,55 @@ export const AuthProvider = ({ children }) => {
         if (userSnap.exists()) {
           userData = userSnap.data();
         } else {
-          // ✅ Create company for first-time user
+          // First-time login: create company + mark inactive
           const companyRef = await addDoc(collection(db, "companies"), {
-            name: firebaseUser.displayName || firebaseUser.email.split("@")[0] + "'s Company",
+            name: (firebaseUser.displayName || firebaseUser.email.split("@")[0]) + "'s Company",
             tier: "free",
             tokensUsedToday: 0,
-            tokensUsedMonth: 0, // ✅ Added field
+            tokensUsedMonth: 0,
             lastReset: Timestamp.now(),
             createdBy: firebaseUser.uid,
+            status: "pending",
           });
-
-          const companyId = companyRef.id;
 
           userData = {
             email: firebaseUser.email,
             role: "user",
             tier: "free",
-            companyId,
+            companyId: companyRef.id,
+            active: false,
+            createdAt: Timestamp.now(),
           };
-
           await setDoc(userRef, userData);
-          console.log(`✅ User + company created for ${firebaseUser.uid}`);
+
+          // send verification email if needed
+          if (!firebaseUser.emailVerified) {
+            try { await sendEmailVerification(firebaseUser); } catch {}
+          }
         }
 
-        // Set role separately for legacy support
-        setRole(userData.role || "user");
+        // claims (active enforced in rules; also stored in user doc for UI)
+        let claims = {};
+        try {
+          const res = await getIdTokenResult(firebaseUser);
+          claims = res.claims || {};
+        } catch {}
 
-        // Set merged user info for global use
+        setRole(userData.role || "user");
         setUser({
           uid: firebaseUser.uid,
           email: firebaseUser.email,
           displayName: firebaseUser.displayName,
           photoURL: firebaseUser.photoURL,
+          emailVerified: !!firebaseUser.emailVerified,
+          claims,
           ...userData,
         });
 
-        // Ensure usage document exists
-        const usageRef = doc(db, "usage", firebaseUser.uid);
-        const usageSnap = await getDoc(usageRef);
-        if (!usageSnap.exists()) {
-          await setDoc(usageRef, {
-            tokensUsed: 0,
-            lastReset: Timestamp.now(),
-          });
-          console.log(`✅ Usage doc created for ${firebaseUser.uid}`);
-        }
-      } else {
-        // Logged out
-        setUser(null);
-        setRole("user");
+        // IMPORTANT: Do NOT create usage docs here; wait until user is active.
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     });
 
     return () => unsub();
@@ -85,12 +92,7 @@ export const AuthProvider = ({ children }) => {
         children
       ) : (
         <div className="min-h-screen flex flex-col items-center justify-center">
-          <Lottie
-            loop
-            animationData={loaderAnimation}
-            play
-            style={{ width: 200, height: 200 }}
-          />
+          <Lottie loop animationData={loaderAnimation} play style={{ width: 200, height: 200 }} />
         </div>
       )}
     </AuthContext.Provider>

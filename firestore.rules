@@ -1,0 +1,56 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() { return request.auth != null; }
+    function isActive() { return request.auth != null && request.auth.token.active == true; }
+    function isOwner(uid) { return request.auth != null && request.auth.uid == uid; }
+    function isAdmin() { return request.auth != null && request.auth.token.role == 'admin'; }
+
+    // USERS (self or admin). Allow even if not active so they can complete verification.
+    match /users/{uid} {
+      allow read: if isSignedIn() && (isOwner(uid) || isAdmin());
+      allow write: if isSignedIn() && (isOwner(uid) || isAdmin());
+    }
+
+    // COMPANIES (read requires active; write only admin)
+    match /companies/{companyId} {
+      allow read: if isSignedIn() && isActive();
+      allow write: if isAdmin();
+    }
+
+    // USAGE (only owner, and must be active)
+    match /usage/{uid} {
+      allow read, write: if isOwner(uid) && isActive();
+    }
+
+    // FAQ root doc per company (metadata)
+    match /faqs/{companyId} {
+      allow read, write: if (isSignedIn() && isActive() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == companyId)
+        || isAdmin();
+    }
+
+    // FAQ list subcollection per company
+    match /faqs/{companyId}/list/{faqId} {
+      allow read, write: if (isSignedIn() && isActive() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == companyId)
+        || isAdmin();
+    }
+
+    // GLOBAL SETTINGS (admin only)
+    match /settings/global {
+      allow read, write: if isSignedIn() && isAdmin();
+    }
+
+    // LEADS (admin only)
+    match /leads/{leadId} {
+      allow read, write: if isSignedIn() && isAdmin();
+    }
+
+    // DEFAULT DENY
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

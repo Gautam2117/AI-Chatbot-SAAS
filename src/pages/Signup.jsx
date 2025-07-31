@@ -1,49 +1,49 @@
+// src/pages/Signup.jsx
 import { auth, db } from "../firebase";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import {
-  doc,
-  setDoc,
-  Timestamp,
-  collection,
-  addDoc,
-} from "firebase/firestore";
+import { createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
+import { doc, setDoc, Timestamp, collection, addDoc } from "firebase/firestore";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 export default function Signup() {
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
+  const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
 
   const signup = async () => {
+    if (busy) return;
+    setBusy(true);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-      const user = userCredential.user;
+      const cred = await createUserWithEmailAndPassword(auth, email.trim(), pass);
+      const user = cred.user;
 
-      // ✅ Step 1: Create a new company for this user
+      // company pending
       const companyRef = await addDoc(collection(db, "companies"), {
         name: email.split("@")[0] + "'s Company",
         tier: "free",
         tokensUsedToday: 0,
-        tokensUsedMonth: 0, // ✅ Monthly token tracking added
+        tokensUsedMonth: 0,
         lastReset: Timestamp.now(),
         createdBy: user.uid,
+        status: "pending",
       });
 
-      const companyId = companyRef.id;
-
-      // ✅ Step 2: Create the user document and link the company
-      const userRef = doc(db, "users", user.uid);
-      await setDoc(userRef, {
+      await setDoc(doc(db, "users", user.uid), {
         email: user.email,
         role: "user",
-        companyId: companyId,
+        companyId: companyRef.id,
+        tier: "free",
+        active: false,
+        createdAt: Timestamp.now(),
       });
 
-      console.log(`✅ User created: ${user.uid}, linked to company ${companyId}`);
-      navigate("/");
+      try { await sendEmailVerification(user); } catch {}
+      navigate("/verify");
     } catch (e) {
-      alert(e.message);
+      alert(e?.message || "Signup failed");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -56,20 +56,23 @@ export default function Signup() {
         <input
           className="border-2 border-gray-200 px-4 py-3 w-full rounded-lg focus:ring-2 focus:ring-purple-400 focus:outline-none transition duration-300"
           placeholder="📧 Email"
+          value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
         <input
           className="border-2 border-gray-200 px-4 py-3 w-full rounded-lg focus:ring-2 focus:ring-purple-400 focus:outline-none transition duration-300"
           type="password"
           placeholder="🔒 Password"
+          value={pass}
           onChange={(e) => setPass(e.target.value)}
         />
 
         <button
-          className="bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold px-4 py-3 rounded-lg w-full shadow-md hover:from-purple-700 hover:to-pink-700 transition duration-300"
+          className="bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold px-4 py-3 rounded-lg w-full shadow-md hover:from-purple-700 hover:to-pink-700 transition duration-300 disabled:opacity-60"
+          disabled={busy}
           onClick={signup}
         >
-          Sign Up
+          {busy ? "Creating..." : "Sign Up"}
         </button>
 
         <p className="text-sm text-center mt-4 text-gray-600">

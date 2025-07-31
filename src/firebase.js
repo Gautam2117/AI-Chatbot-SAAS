@@ -1,13 +1,11 @@
-// Import the functions you need from the SDKs you need
+// src/firebase.js
 import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+import { getFunctions } from "firebase/functions";
+import { getAnalytics, isSupported as analyticsSupported } from "firebase/analytics";
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyBVXAJkMAxmsAGzgBIV5h2ATfsfpTlSA8w",
   authDomain: "ai-chatbot-saas-71e68.firebaseapp.com",
@@ -15,11 +13,32 @@ const firebaseConfig = {
   storageBucket: "ai-chatbot-saas-71e68.firebasestorage.app",
   messagingSenderId: "901084485654",
   appId: "1:901084485654:web:0a3d1b47d6c5c9c6ea3d37",
-  measurementId: "G-SFCQ172Z95"
+  measurementId: "G-SFCQ172Z95",
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+export const app = initializeApp(firebaseConfig);
+
+/** 🔐 App Check FIRST (before other Firebase services) */
+if (import.meta.env.DEV) {
+  // one-time: console will print a token; add it in Console → App Check → Apps → Add debug token
+  self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+}
+const siteKey = import.meta.env.VITE_RECAPTCHA_V3_SITE_KEY;
+if (!siteKey) {
+  console.warn("VITE_RECAPTCHA_V3_SITE_KEY is missing; App Check will be disabled.");
+} else {
+  initializeAppCheck(app, {
+    provider: new ReCaptchaV3Provider(siteKey),
+    isTokenAutoRefreshEnabled: true,
+  });
+}
+
+/** now initialize the rest */
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const functions = getFunctions(app);
+
+let analytics = null;
+if (typeof window !== "undefined") {
+  analyticsSupported().then((ok) => { if (ok) analytics = getAnalytics(app); });
+}
