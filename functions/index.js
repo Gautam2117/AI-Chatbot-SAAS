@@ -1,23 +1,27 @@
+/* -------------  Cloud Functions: Botify  ------------- */
 import admin from "firebase-admin";
 import * as functions from "firebase-functions";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
 
+/* -------- initialise Firebase Admin -------- */
 admin.initializeApp();
 const db = admin.firestore();
 
-// ---------- helpers ----------
+/* -------- helpers -------- */
 const sha256 = (s) => crypto.createHash("sha256").update(s).digest("hex");
+const nowMs = () => Date.now();
 
 const DISPOSABLE = new Set([
-  "mailinator.com","tempmail.com","guerrillamail.com","10minutemail.com",
-  "yopmail.com","discard.email","sharklasers.com","getnada.com","temp-mail.org",
-  "trashmail.com","moakt.com","tempail.com","mail7.io"
+  "mailinator.com", "tempmail.com", "guerrillamail.com", "10minutemail.com",
+  "yopmail.com", "discard.email", "sharklasers.com", "getnada.com", "temp-mail.org",
+  "trashmail.com", "moakt.com", "tempail.com", "mail7.io",
 ]);
 
-const mailFrom = (functions.config().mail?.from) || "Botify <noreply@botify.local>";
-let transporter = null;
+/* -------- SMTP transport (optional in dev) -------- */
+const mailFrom = functions.config().mail?.from || "Botify <noreply@botify.local>";
 
+let transporter = null;
 try {
   const { host, port, user, pass } = functions.config().smtp || {};
   if (host && port && user && pass) {
@@ -27,178 +31,192 @@ try {
       secure: Number(port) === 465,
       auth: { user, pass },
     });
+    console.info("✅ SMTP transport initialised");
+  } else {
+    console.warn("⚠️  SMTP not configured — OTP will be logged to console.");
   }
 } catch (e) {
-  console.warn("SMTP not configured, OTPs will be logged in console only.");
+  console.warn("⚠️  nodemailer transport failed — OTP will be logged to console.", e);
 }
 
 async function sendEmail(to, subject, text) {
   if (!transporter) {
-    console.log(`[DEV EMAIL] to=${to} subject=${subject} text=${text}`);
+    console.log(`[DEV EMAIL] to=${to}  subject=${subject}  text=${text}`);
     return;
   }
-  await transporter.sendMail({
-    from: mailFrom,
-    to,
-    subject,
-    text,
-  });
+  await transporter.sendMail({ from: mailFrom, to, subject, text });
 }
 
-// ---------- Blocking: beforeCreate ----------
-export const beforeCreate = functions.auth.user().beforeCreate(async (user, context) => {
-  const email = (user.email || "").toLowerCase();
-  const domain = email.split("@")[1];
+/* -------- Common run options -------- */
+const runOptsFast = { region: "us-central1", timeoutSeconds: 5,  memory: "128MB" };
+const runOptsCall = { region: "us-central1", timeoutSeconds: 20, memory: "256MB" };
 
-  if (!email || !domain) {
-    throw new functions.auth.HttpsError("failed-precondition", "Email required.");
-  }
+/* --------------------------------------------------- */
+/* -------- Blocking Triggers (Auth v2)  ------------- */
 
-  // block disposable domains
-  if (DISPOSABLE.has(domain)) {
-    throw new functions.auth.HttpsError("failed-precondition", "Disposable email not allowed.");
-  }
+/* 1️⃣  beforeCreate — validate + rate-limit sign-ups */
+export const beforeCreate = functions
+  .runWith(runOptsFast)
+  .auth.user()
+  .beforeCreate(async (user, context) => {
+    const email = (user.email || "").toLowerCase();
+    const domain = email.split("@")[1];
 
-  // rate-limit signups by IP (3 per 24h)
-  const ip = context.ipAddress || context.rawRequest?.ip || "unknown";
-  const ipRef = db.collection("signup_ips").doc(sha256(ip));
-  await db.runTransaction(async (tx) => {
-    const snap = await tx.get(ipRef);
-    const now = Date.now();
-    if (!snap.exists) {
-      tx.set(ipRef, { count: 1, ts: now });
-      return;
+    if (!email || !domain) {
+      console.warn("❌ beforeCreate: missing email");
+      throw new functions.auth.HttpsError("failed-precondition", "Email required.");
     }
-    let { count, ts } = snap.data();
-    if (now - ts > 24 * 3600 * 1000) {
-      count = 0; ts = now;
+
+    if (DISPOSABLE.has(domain)) {
+      console.warn("❌ beforeCreate: disposable domain", email);
+      throw new functions.auth.HttpsError("failed-precondition", "Disposable email not allowed.");
     }
+
+    // ≤3 sign-ups / 24h / IP
+    const ip = context.ipAddress || context.rawRequest?.ip || "unknown";
+    const ipDoc = db.doc(`signup_ips/${sha256(ip)}`);
+    const now = nowMs();
+
+    const snap = await ipDoc.get();
+    let { count = 0, ts = now } = snap.exists ? snap.data() : {};
+    if (now - ts > 86_400_000) count = 0; // reset after 24 h
     if (count >= 3) {
-      throw new functions.auth.HttpsError("resource-exhausted", "Too many signups from this IP.");
+      console.warn("❌ beforeCreate: IP limit reached", ip);
+      throw new functions.auth.HttpsError("resource-exhausted", "Too many sign-ups from this IP.");
     }
-    tx.set(ipRef, { count: count + 1, ts: now });
-  });
-});
+    await ipDoc.set({ count: count + 1, ts: now }, { merge: true });
 
-// ---------- Blocking: beforeSignIn (optional block logic) ----------
-export const beforeSignIn = functions.auth.user().beforeSignIn(async (user, context) => {
-  // Example: if custom claim 'blocked' is true => block login
-  const token = context.authToken || {};
-  if (token.blocked) {
-    throw new functions.auth.HttpsError("permission-denied", "Account blocked.");
-  }
-});
-
-// ---------- Callable: requestEmailOtp ----------
-export const requestEmailOtp = functions.https.onCall(async (data, context) => {
-  if (!context.app) {
-    // App Check required
-    throw new functions.https.HttpsError("failed-precondition", "App Check required.");
-  }
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "Login required.");
-  }
-
-  const uid = context.auth.uid;
-  const user = await admin.auth().getUser(uid);
-  if (!user.email) {
-    throw new functions.https.HttpsError("failed-precondition", "No email on account.");
-  }
-
-  // throttle: 3 OTPs/hour
-  const limiterRef = db.collection("otp_limits").doc(uid);
-  await db.runTransaction(async (tx) => {
-    const s = await tx.get(limiterRef);
-    const now = Date.now();
-    if (!s.exists) {
-      tx.set(limiterRef, { count: 1, ts: now });
-      return;
-    }
-    const { count, ts } = s.data();
-    if (now - ts < 3600 * 1000 && count >= 3) {
-      throw new functions.https.HttpsError("resource-exhausted", "Too many OTP requests.");
-    }
-    if (now - ts < 3600 * 1000) {
-      tx.update(limiterRef, { count: count + 1 });
-    } else {
-      tx.set(limiterRef, { count: 1, ts: now });
-    }
+    console.info("✅ beforeCreate ok for", email);
   });
 
-  // generate & store OTP
-  const code = String(Math.floor(100000 + Math.random() * 900000));
-  const otpRef = db.collection("users").doc(uid).collection("otps").doc();
-  await otpRef.set({
-    hash: sha256(code),
-    exp: admin.firestore.Timestamp.fromMillis(Date.now() + 10 * 60 * 1000),
-    used: false,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+/* 2️⃣  beforeSignIn — block flagged accounts */
+export const beforeSignIn = functions
+  .runWith(runOptsFast)
+  .auth.user()
+  .beforeSignIn(async (user, context) => {
+    if (context.authToken?.blocked) {
+      console.warn("❌ beforeSignIn: blocked UID", user.uid);
+      throw new functions.auth.HttpsError("permission-denied", "Account blocked.");
+    }
+    console.info("✅ beforeSignIn ok:", user.uid);
   });
 
-  await sendEmail(
-    user.email,
-    "Your Botify verification code",
-    `Your one-time verification code is ${code}. It expires in 10 minutes.`
-  );
+/* --------------------------------------------------- */
+/* -------- Callable: requestEmailOtp ----------------- */
+export const requestEmailOtp = functions
+  .runWith(runOptsCall)
+  .https.onCall(async (_data, context) => {
+    try {
+      if (!context.app)
+        throw new functions.https.HttpsError("failed-precondition", "App Check required.");
+      if (!context.auth)
+        throw new functions.https.HttpsError("unauthenticated", "Login required.");
 
-  return { ok: true };
-});
+      const uid = context.auth.uid;
+      const user = await admin.auth().getUser(uid);
+      if (!user.email)
+        throw new functions.https.HttpsError("failed-precondition", "No email on account.");
 
-// ---------- Callable: verifyEmailOtp ----------
-export const verifyEmailOtp = functions.https.onCall(async (data, context) => {
-  if (!context.app) {
-    throw new functions.https.HttpsError("failed-precondition", "App Check required.");
-  }
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "Login required.");
-  }
+      // throttle: 3 OTPs / hour / uid
+      const limDoc = db.doc(`otp_limits/${uid}`);
+      const now = nowMs();
+      const limSnap = await limDoc.get();
+      let { count = 0, ts = now } = limSnap.exists ? limSnap.data() : {};
+      if (now - ts > 3_600_000) count = 0; // reset hourly
+      if (count >= 3)
+        throw new functions.https.HttpsError("resource-exhausted", "Too many OTP requests.");
+      await limDoc.set({ count: count + 1, ts: now }, { merge: true });
 
-  const uid = context.auth.uid;
-  const code = String(data?.code || "");
-  if (!/^\d{6}$/.test(code)) {
-    throw new functions.https.HttpsError("invalid-argument", "Invalid code format.");
-  }
+      // generate & store OTP as docId = sha256(code)
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const id = sha256(code);
+      await db.doc(`users/${uid}/otps/${id}`).set({
+        hash: id,
+        exp: admin.firestore.Timestamp.fromMillis(now + 10 * 60 * 1000),
+        used: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
 
-  const otpsSnap = await db
-    .collection("users").doc(uid).collection("otps")
-    .orderBy("createdAt", "desc").limit(10).get();
+      await sendEmail(
+        user.email,
+        "Your Botify verification code",
+        `Your one-time verification code is ${code}. It expires in 10 minutes.`
+      );
 
-  const now = Date.now();
-  const h = sha256(code);
-  let matchedDoc = null;
-
-  otpsSnap.forEach((d) => {
-    const x = d.data();
-    if (!x.used && x.hash === h && x.exp.toMillis() >= now) {
-      matchedDoc = d;
+      console.info("📧 OTP emailed to", user.email);
+      return { ok: true };
+    } catch (err) {
+      console.error("requestEmailOtp error:", err);
+      if (err instanceof functions.https.HttpsError) throw err;
+      throw new functions.https.HttpsError("internal", "Could not send OTP. Try again.");
     }
   });
 
-  if (!matchedDoc) return { ok: false, message: "Invalid or expired code." };
-  await matchedDoc.ref.update({ used: true });
+/* ---------- Callable: verifyEmailOtp (hardened) ----- */
+export const verifyEmailOtp = functions
+  .runWith(runOptsCall)
+  .https.onCall(async (data, context) => {
+    try {
+      if (!context.app)
+        throw new functions.https.HttpsError("failed-precondition", "App Check required.");
+      if (!context.auth)
+        throw new functions.https.HttpsError("unauthenticated", "Login required.");
 
-  // activate account
-  const userRef = db.collection("users").doc(uid);
-  const userSnap = await userRef.get();
-  if (!userSnap.exists) {
-    throw new functions.https.HttpsError("failed-precondition", "User document missing.");
-  }
-  const userDoc = userSnap.data();
-  const companyId = userDoc.companyId;
+      const uid  = context.auth.uid;
+      const code = String(data?.code || "");
+      if (!/^\d{6}$/.test(code))
+        throw new functions.https.HttpsError("invalid-argument", "Invalid code format.");
 
-  await db.runTransaction(async (tx) => {
-    tx.update(userRef, { active: true, activatedAt: admin.firestore.FieldValue.serverTimestamp() });
-    if (companyId) {
-      tx.update(db.collection("companies").doc(companyId), { status: "active" });
+      const userRef = db.doc(`users/${uid}`);
+      const userSnap = await userRef.get();
+      if (!userSnap.exists)
+        throw new functions.https.HttpsError("failed-precondition", "User document missing.");
+
+      const userDoc = userSnap.data() || {};
+      // Idempotency: already active? OK.
+      if (userDoc.active === true) {
+        console.info("verifyEmailOtp: already active", uid);
+        return { ok: true };
+      }
+
+      const id = sha256(code);
+      const otpRef  = db.doc(`users/${uid}/otps/${id}`);
+      const otpSnap = await otpRef.get();
+      if (!otpSnap.exists)          return { ok:false, message:"Invalid or expired code." };
+      const otp = otpSnap.data();
+      if (otp.used === true)        return { ok:false, message:"Invalid or expired code." };
+      if (otp.exp.toMillis() < nowMs())
+        return { ok:false, message:"Invalid or expired code." };
+
+      await db.runTransaction(async (tx) => {
+        // 1) mark OTP used
+        tx.update(otpRef, { used: true });
+
+        // 2) activate user
+        tx.update(userRef, {
+          active: true,
+          activatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        // 3) activate company if present
+        const latestUser = (await tx.get(userRef)).data() || userDoc;
+        if (latestUser.companyId) {
+          tx.update(db.doc(`companies/${latestUser.companyId}`), { status: "active" });
+        }
+      });
+
+      // 4) set custom claims (role/tier preserved)
+      await admin.auth().setCustomUserClaims(uid, {
+        ...(userDoc.role ? { role: userDoc.role } : {}),
+        active: true,
+        tier: userDoc.tier || "free",
+      });
+
+      console.info("✅ verifyEmailOtp: account activated", uid);
+      return { ok: true };
+    } catch (err) {
+      console.error("verifyEmailOtp error:", err);
+      if (err instanceof functions.https.HttpsError) throw err;
+      throw new functions.https.HttpsError("internal", "Verification failed. Try again.");
     }
   });
-
-  // set custom claims (used by Firestore rules)
-  await admin.auth().setCustomUserClaims(uid, {
-    ...(userDoc.role ? { role: userDoc.role } : {}),
-    active: true,
-    tier: userDoc.tier || "free",
-  });
-
-  return { ok: true };
-});
