@@ -21,11 +21,9 @@ const DISPOSABLE = new Set([
 /* -------- SMTP transport: LAZY init to avoid load-time stalls -------- */
 const mailFrom = functions.config().mail?.from || "Botify <noreply@botify.local>";
 
-/** Lazily create and cache a nodemailer transport on first use. */
 let _transport = null;
 function getTransport() {
   if (_transport) return _transport;
-
   try {
     const cfg = functions.config().smtp || {};
     const host = cfg.host;
@@ -63,7 +61,7 @@ async function sendEmail(to, subject, text) {
 }
 
 /* -------- Common run options (v1 SDK) -------- */
-const runOptsFast = { region: "us-central1", timeoutSeconds: 5, memory: "128MB" };
+const runOptsFast = { region: "us-central1", timeoutSeconds: 5,  memory: "128MB" };
 const runOptsCall = { region: "us-central1", timeoutSeconds: 20, memory: "256MB" };
 
 /* --------------------------------------------------- */
@@ -158,7 +156,7 @@ export const requestEmailOtp = functions
     }
   });
 
-/* ---------- Callable: verifyEmailOtp (hardened) ----- */
+/* ---------- Callable: verifyEmailOtp (production) --- */
 export const verifyEmailOtp = functions
   .runWith(runOptsCall)
   .https.onCall(async (data, context) => {
@@ -180,7 +178,8 @@ export const verifyEmailOtp = functions
 
       const userDoc = userSnap.data() || {};
       if (userDoc.active === true) {
-        return { ok: true }; // idempotent
+        // Already activated: keep idempotent
+        return { ok: true };
       }
 
       const id = sha256(code);
@@ -192,7 +191,7 @@ export const verifyEmailOtp = functions
       if (otp.exp.toMillis() < nowMs())
         return { ok:false, message:"Invalid or expired code." };
 
-      // Transaction: reads were done before; only writes inside
+      // Transaction: only writes (reads done above)
       await db.runTransaction(async (tx) => {
         tx.update(otpRef, { used: true });
         tx.update(userRef, {
@@ -204,6 +203,14 @@ export const verifyEmailOtp = functions
         }
       });
 
+      // Mark Auth user as email verified so route guards pass immediately
+      try {
+        await admin.auth().updateUser(uid, { emailVerified: true });
+      } catch (e) {
+        console.warn("verifyEmailOtp: updateUser(emailVerified) failed:", e);
+      }
+
+      // Set custom claims (do not fail flow if this errors)
       try {
         await admin.auth().setCustomUserClaims(uid, {
           ...(userDoc.role ? { role: userDoc.role } : {}),

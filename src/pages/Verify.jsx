@@ -2,7 +2,6 @@
 import { useContext, useEffect, useState, useCallback } from "react";
 import { AuthContext } from "../context/AuthProvider";
 import { auth, functions } from "../firebase";
-import { sendEmailVerification } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
 import { useNavigate } from "react-router-dom";
 
@@ -22,7 +21,7 @@ function Toast({ notice, onClose }) {
       <div className="flex items-center gap-3">
         <span>{notice.message}</span>
         <button
-          className="ml-2/ text-white/80 hover:text-white"
+          className="ml-2 text-white/80 hover:text-white"
           onClick={onClose}
           aria-label="Close"
         >
@@ -38,7 +37,6 @@ export default function Verify() {
   const [code, setCode] = useState("");
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
-  const [resending, setResending] = useState(false);
   const [notice, setNotice] = useState(null);
   const navigate = useNavigate();
 
@@ -47,6 +45,7 @@ export default function Verify() {
     if (ms) setTimeout(() => setNotice(null), ms);
   }, []);
 
+  // If already verified & active, go home
   useEffect(() => {
     if (!user) return;
     const isActive = user?.claims?.active === true || user?.active === true;
@@ -65,11 +64,10 @@ export default function Verify() {
       await fn({});
       show("success", "OTP sent to your email.");
     } catch (e) {
-      // Common cause: App Check not initialized/enforced
       const msg =
         e?.message?.includes("App Check")
           ? "App Check token required. Refresh the page and try again."
-          : e?.message || "Failed to send OTP";
+          : e?.message || "Failed to send OTP.";
       show("error", msg);
     } finally {
       setSending(false);
@@ -85,10 +83,16 @@ export default function Verify() {
     try {
       const fn = httpsCallable(functions, "verifyEmailOtp");
       const res = await fn({ code: code.trim() });
+
       if (res?.data?.ok) {
-        await auth.currentUser?.getIdToken(true); // pull in fresh custom claims
-        show("success", "Verification successful! Redirecting…", 1500);
-        setTimeout(() => navigate("/"), 900);
+        // Backend marks emailVerified + sets claims; pull them in and go.
+        try {
+          await auth.currentUser?.reload();
+          await auth.currentUser?.getIdToken(true);
+        } catch {}
+        show("success", "Verification successful! Redirecting…", 1200);
+        // small delay for the Auth state listener to update context
+        setTimeout(() => navigate("/"), 800);
       } else {
         show("error", res?.data?.message || "Invalid or expired code.");
       }
@@ -96,19 +100,6 @@ export default function Verify() {
       show("error", e?.message || "Verification failed.");
     } finally {
       setVerifying(false);
-    }
-  };
-
-  const resendEmail = async () => {
-    if (!auth.currentUser) return;
-    setResending(true);
-    try {
-      await sendEmailVerification(auth.currentUser);
-      show("success", "Verification email re-sent.");
-    } catch (e) {
-      show("error", e?.message || "Failed to resend email.");
-    } finally {
-      setResending(false);
     }
   };
 
@@ -121,8 +112,8 @@ export default function Verify() {
     if (e.key === "Enter") verifyOtp();
   };
 
-  const isEmailVerified =
-    user?.emailVerified === true || user?.claims?.email_verified === true;
+  // Optional: auto-send OTP on first visit
+  // useEffect(() => { requestOtp(); }, []); // uncomment if desired
 
   return (
     <>
@@ -133,24 +124,8 @@ export default function Verify() {
           <h2 className="text-2xl font-bold">Verify your account</h2>
 
           <p className="mt-2 text-sm text-gray-600">
-            {isEmailVerified ? (
-              <>
-                We’ll verify your account with a one-time code sent to{" "}
-                <b>{user.email}</b>.
-              </>
-            ) : (
-              <>
-                We sent a verification link to <b>{user.email}</b>. Please click
-                it.
-                <button
-                  onClick={resendEmail}
-                  className="underline ml-1"
-                  disabled={resending}
-                >
-                  {resending ? "Resending…" : "Resend email"}
-                </button>
-              </>
-            )}
+            We’ll verify your account with a one-time code sent to{" "}
+            <b>{user.email}</b>.
           </p>
 
           <div className="mt-6">
