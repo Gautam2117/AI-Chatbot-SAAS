@@ -1,6 +1,5 @@
-// src/pages/Signup.jsx
 import { auth, db } from "../firebase";
-import { createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
+import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc, Timestamp, collection, addDoc } from "firebase/firestore";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -18,7 +17,6 @@ export default function Signup() {
       const cred = await createUserWithEmailAndPassword(auth, email.trim(), pass);
       const user = cred.user;
 
-      // company pending
       const companyRef = await addDoc(collection(db, "companies"), {
         name: email.split("@")[0] + "'s Company",
         tier: "free",
@@ -38,7 +36,7 @@ export default function Signup() {
         createdAt: Timestamp.now(),
       });
 
-      try { await sendEmailVerification(user); } catch {}
+      // No email-link verification; OTP flow only
       navigate("/verify");
     } catch (e) {
       alert(e?.message || "Signup failed");

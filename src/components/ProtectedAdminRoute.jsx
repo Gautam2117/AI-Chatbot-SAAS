@@ -8,8 +8,7 @@ export default function ProtectedAdminRoute({ children }) {
   if (!user) return <Navigate to="/login" replace />;
 
   const isActive = user?.claims?.active === true || user?.active === true;
-  const isEmailVerified = user?.emailVerified === true || user?.claims?.email_verified === true;
-  if (!isEmailVerified || !isActive) return <Navigate to="/verify" replace />;
+  if (!isActive) return <Navigate to="/verify" replace />;
 
   const role = user?.claims?.role || user?.role;
   if (role !== "admin") return <Navigate to="/" replace />;

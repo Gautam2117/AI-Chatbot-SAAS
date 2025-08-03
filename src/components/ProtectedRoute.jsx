@@ -7,10 +7,9 @@ export default function ProtectedRoute({ children }) {
   if (loading) return null;
   if (!user) return <Navigate to="/login" replace />;
 
-  // Accept either the custom claim OR the Firestore flag
+  // Single source of truth: active
   const isActive = user?.claims?.active === true || user?.active === true;
-  const isEmailVerified = user?.emailVerified === true || user?.claims?.email_verified === true;
+  if (!isActive) return <Navigate to="/verify" replace />;
 
-  if (!isEmailVerified || !isActive) return <Navigate to="/verify" replace />;
   return children;
 }

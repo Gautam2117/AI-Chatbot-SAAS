@@ -1,9 +1,7 @@
-// src/context/AuthProvider.jsx
 import { createContext, useEffect, useRef, useState } from "react";
 import { auth, db } from "../firebase";
 import {
   onAuthStateChanged,
-  sendEmailVerification,
   getIdToken,
   getIdTokenResult,
 } from "firebase/auth";
@@ -29,7 +27,6 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, async (firebaseUser) => {
-      // clean up previous doc listener when user changes / logs out
       if (userDocUnsubRef.current) {
         userDocUnsubRef.current();
         userDocUnsubRef.current = null;
@@ -44,7 +41,7 @@ export const AuthProvider = ({ children }) => {
 
       setLoading(true);
       try {
-        // refresh token (ensures we can see new custom claims after OTP)
+        // Pull fresh custom claims quickly (e.g., active after OTP)
         try { await getIdToken(firebaseUser, true); } catch {}
 
         const userRef = doc(db, "users", firebaseUser.uid);
@@ -54,7 +51,7 @@ export const AuthProvider = ({ children }) => {
         if (userSnap.exists()) {
           userData = userSnap.data();
         } else {
-          // First-time login: create company + mark inactive
+          // First-time login: create company + mark inactive (OTP will activate)
           const companyRef = await addDoc(collection(db, "companies"), {
             name:
               (firebaseUser.displayName ||
@@ -76,14 +73,9 @@ export const AuthProvider = ({ children }) => {
             createdAt: Timestamp.now(),
           };
           await setDoc(userRef, userData);
-
-          // Send email verification only for password users (google is already verified)
-          if (!firebaseUser.emailVerified) {
-            try { await sendEmailVerification(firebaseUser); } catch {}
-          }
         }
 
-        // Start a realtime listener so "active" flips instantly after OTP verification
+        // Realtime user doc listener (so active flips the UI instantly)
         userDocUnsubRef.current = onSnapshot(userRef, async (snap) => {
           const data = snap.exists() ? snap.data() : userData || {};
 
@@ -99,7 +91,6 @@ export const AuthProvider = ({ children }) => {
             email: firebaseUser.email,
             displayName: firebaseUser.displayName,
             photoURL: firebaseUser.photoURL,
-            emailVerified: !!firebaseUser.emailVerified,
             claims,
             ...data,
           });
