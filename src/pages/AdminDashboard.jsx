@@ -1,14 +1,8 @@
 // src/pages/AdminDashboard.jsx
-import React, { useEffect, useMemo, useState, useContext } from "react";
+import React, { useEffect, useMemo, useRef, useState, useContext } from "react";
 import { db } from "../firebase";
 import {
-  collection,
-  getDocs,
-  doc,
-  updateDoc,
-  Timestamp,
-  query,
-  orderBy,
+  collection, getDocs, doc, updateDoc, Timestamp, query, orderBy,
 } from "firebase/firestore";
 import { AuthContext } from "../context/AuthProvider";
 import { useNavigate } from "react-router-dom";
@@ -17,24 +11,14 @@ import "react-datepicker/dist/react-datepicker.css";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import {
-  FaDownload,
-  FaSearch,
-  FaArrowLeft,
-  FaArrowRight,
-  FaExclamationTriangle,
+  FaDownload, FaSearch, FaArrowLeft, FaArrowRight, FaExclamationTriangle,
 } from "react-icons/fa";
 import { MdOutlineFilterAlt } from "react-icons/md";
 
-/* ---------------- Toast (lightweight) ---------------- */
+/* ---------------- Toast ---------------- */
 function useToast() {
   const [notice, setNotice] = useState(null);
   const show = (type, message, ms = 2600) => {
@@ -44,14 +28,10 @@ function useToast() {
   const Toast = () =>
     !notice ? null : (
       <div
-        className={`fixed top-4 left-1/2 -translate-x-1/2 z-[100] px-4 py-2 text-sm rounded-xl shadow-xl backdrop-blur-md
-        ${
-          notice.type === "error"
-            ? "bg-rose-600/90 text-white"
-            : notice.type === "warn"
-            ? "bg-amber-600/90 text-white"
-            : "bg-emerald-600/90 text-white"
-        }`}
+        className={`fixed top-4 left-1/2 -translate-x-1/2 z-[100] px-4 py-2 text-sm rounded-xl shadow-xl
+        ${notice.type === "error" ? "bg-rose-600/90 text-white"
+          : notice.type === "warn" ? "bg-amber-600/90 text-white"
+          : "bg-emerald-600/90 text-white"}`}
       >
         {notice.message}
       </div>
@@ -59,7 +39,6 @@ function useToast() {
   return { Toast, show };
 }
 
-/* ---------------- Reusable bits ---------------- */
 const Badge = ({ tone = "gray", children }) => {
   const map = {
     gray: "bg-gray-100 text-gray-700",
@@ -76,18 +55,16 @@ const Badge = ({ tone = "gray", children }) => {
 const Chip = ({ active, children, onClick }) => (
   <button
     onClick={onClick}
-    className={`px-3 py-1 rounded-full border transition ${
-      active
-        ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
-        : "bg-white/80 text-indigo-900 border-indigo-200 hover:bg-white"
-    }`}
+    className={`px-3 py-1 rounded-full border transition
+      ${active ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+               : "bg-white text-indigo-900 border-indigo-200 hover:bg-indigo-50"}`}
   >
     {children}
   </button>
 );
 
 const AssistantHint = ({ children }) => (
-  <div className="relative rounded-2xl p-4 bg-white/70 backdrop-blur-xl border border-white/60 shadow-sm">
+  <div className="relative rounded-2xl p-4 bg-white border border-indigo-100 shadow-sm">
     <div className="absolute -top-2 left-4 w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-fuchsia-500 grid place-items-center text-white text-sm shadow">
       🤖
     </div>
@@ -105,7 +82,7 @@ export default function AdminDashboard() {
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // filters / sorting / paging
+  // filters
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [onlyPaid, setOnlyPaid] = useState(false);
@@ -118,6 +95,9 @@ export default function AdminDashboard() {
   const rowsPerPage = 10;
   const [page, setPage] = useState(1);
 
+  // --- Fix #1: prevent double fetch in React 18 dev ---
+  const didFetch = useRef(false);
+
   useEffect(() => {
     if (!user || role !== "admin") navigate("/");
   }, [user, role, navigate]);
@@ -128,6 +108,9 @@ export default function AdminDashboard() {
   }, [search]);
 
   useEffect(() => {
+    if (didFetch.current) return;
+    didFetch.current = true;
+
     const load = async () => {
       setLoading(true);
       try {
@@ -169,6 +152,7 @@ export default function AdminDashboard() {
         setLoading(false);
       }
     };
+
     load();
   }, [show]);
 
@@ -218,15 +202,7 @@ export default function AdminDashboard() {
     });
     return out;
   }, [
-    rows,
-    debouncedSearch,
-    onlyPaid,
-    tierFilter,
-    companyFilter,
-    startDate,
-    endDate,
-    sort.field,
-    sort.dir,
+    rows, debouncedSearch, onlyPaid, tierFilter, companyFilter, startDate, endDate, sort.field, sort.dir,
   ]);
 
   // pagination
@@ -254,7 +230,7 @@ export default function AdminDashboard() {
     }
   };
 
-  const [confirm, setConfirm] = useState(null); // {companyId, scope: "daily"|"monthly"}
+  const [confirm, setConfirm] = useState(null);
   const resetTokens = async (companyId, scope = "daily") => {
     if (!companyId) return;
     const ref = doc(db, "companies", companyId);
@@ -287,7 +263,7 @@ export default function AdminDashboard() {
     }
   };
 
-  // exports
+  // export helpers (unchanged)
   const exportCSV = () => {
     const rowsOut = [
       ["User ID", "Email", "Company", "Tier", "Tokens Today", "Last Reset"],
@@ -327,7 +303,7 @@ export default function AdminDashboard() {
       ]),
       startY: 80,
       styles: { fontSize: 9, cellPadding: 6 },
-      headStyles: { fillColor: [124, 58, 237] }, // indigo-600
+      headStyles: { fillColor: [124, 58, 237] },
     });
     docPDF.save("botify_usage.pdf");
   };
@@ -353,7 +329,6 @@ export default function AdminDashboard() {
     <div className="relative min-h-screen p-6 md:p-10 bg-[radial-gradient(1200px_600px_at_20%_-10%,rgba(99,102,241,.18),transparent),radial-gradient(1000px_500px_at_80%_0,rgba(236,72,153,.18),transparent)]">
       <Toast />
 
-      {/* Chatbot-styled header */}
       <div className="mx-auto max-w-7xl">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 grid place-items-center text-white shadow-lg">
@@ -367,7 +342,6 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Assistant hint */}
         <div className="mt-6">
           <AssistantHint>
             Tip: Filter by <strong>plan</strong> and <strong>company</strong>, then export the exact view to CSV/PDF.
@@ -375,7 +349,7 @@ export default function AdminDashboard() {
           </AssistantHint>
         </div>
 
-        {/* KPI cards */}
+        {/* KPI cards (reduced animation to avoid repaint flicker) */}
         <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
             { label: "Total Users", value: kpis.totalUsers },
@@ -383,11 +357,8 @@ export default function AdminDashboard() {
             { label: "Tokens Today", value: kpis.tokensToday },
             { label: "Companies", value: kpis.companiesCount },
           ].map((k) => (
-            <div
-              key={k.label}
-              className="rounded-2xl p-[1.2px] bg-gradient-to-br from-fuchsia-400/60 to-indigo-400/60 animate-[pulse_5s_ease-in-out_infinite]"
-            >
-              <div className="rounded-2xl bg-white/70 backdrop-blur-xl border border-white/60 p-4">
+            <div key={k.label} className="rounded-2xl p-[1.2px] bg-gradient-to-br from-fuchsia-400/60 to-indigo-400/60">
+              <div className="rounded-2xl bg-white border border-indigo-100 p-4">
                 <div className="text-xs uppercase tracking-wide text-indigo-700/80">{k.label}</div>
                 <div className="text-2xl font-extrabold text-indigo-900 mt-1">{k.value}</div>
               </div>
@@ -395,9 +366,12 @@ export default function AdminDashboard() {
           ))}
         </div>
 
-        {/* Sticky Controls */}
-        <div className="mt-6 sticky top-2 z-40">
-          <div className="rounded-2xl bg-white/85 backdrop-blur-xl border border-white/60 shadow p-4">
+        {/* Sticky Controls — solid bg, own layer */}
+        <div
+          className="mt-6 sticky top-2 z-40"
+          style={{ willChange: "transform", transform: "translateZ(0)" }}
+        >
+          <div className="rounded-2xl bg-white border border-indigo-100 shadow p-4">
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3 items-center">
               <div className="xl:col-span-2 relative">
                 <FaSearch className="absolute left-3 top-3 text-gray-400" />
@@ -455,75 +429,50 @@ export default function AdminDashboard() {
               </label>
             </div>
 
-            {/* Quick actions */}
             <div className="mt-3 flex flex-wrap gap-3 justify-end">
-              <button
-                onClick={() => navigate("/admin/leads")}
-                className="rounded-full bg-indigo-600 text-white px-4 py-2 hover:bg-indigo-700"
-              >
+              <button onClick={() => navigate("/admin/leads")} className="rounded-full bg-indigo-600 text-white px-4 py-2 hover:bg-indigo-700">
                 📥 View Leads
               </button>
-              <button
-                onClick={() => navigate("/admin/settings")}
-                className="rounded-full bg-purple-600 text-white px-4 py-2 hover:bg-purple-700"
-              >
+              <button onClick={() => navigate("/admin/settings")} className="rounded-full bg-purple-600 text-white px-4 py-2 hover:bg-purple-700">
                 ⚙️ Bot Settings
               </button>
-              <button
-                onClick={exportCSV}
-                className="inline-flex items-center gap-2 rounded-full bg-emerald-600 text-white px-4 py-2 hover:bg-emerald-700"
-              >
+              <button onClick={exportCSV} className="inline-flex items-center gap-2 rounded-full bg-emerald-600 text-white px-4 py-2 hover:bg-emerald-700">
                 <FaDownload /> CSV
               </button>
-              <button
-                onClick={exportPDF}
-                className="inline-flex items-center gap-2 rounded-full bg-sky-600 text-white px-4 py-2 hover:bg-sky-700"
-              >
+              <button onClick={exportPDF} className="inline-flex items-center gap-2 rounded-full bg-sky-600 text-white px-4 py-2 hover:bg-sky-700">
                 <FaDownload /> PDF
               </button>
             </div>
           </div>
         </div>
 
-        {/* Chart */}
-        <div className="mt-6 rounded-2xl p-[1.2px] bg-gradient-to-br from-fuchsia-400/60 to-indigo-400/60">
-          <div className="rounded-2xl bg-white/80 backdrop-blur-xl border border-white/60 p-4">
-            <h2 className="text-lg font-bold text-indigo-900 mb-2">📊 Token Usage (Today)</h2>
-            <div className="h-[320px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={filtered.slice(0, 30)} margin={{ top: 8, right: 16, left: -16, bottom: 8 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="email" interval={0} angle={-25} textAnchor="end" height={70} />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="tokensUsed" fill="#7C3AED" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+        {/* Chart (solid bg, higher z) */}
+        <div className="mt-6 rounded-2xl border border-indigo-100 bg-white p-4 z-10 relative">
+          <h2 className="text-lg font-bold text-indigo-900 mb-2">📊 Token Usage (Today)</h2>
+          <div className="h-[320px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={filtered.slice(0, 30)} margin={{ top: 8, right: 16, left: -16, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="email" interval={0} angle={-25} textAnchor="end" height={70} />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="tokensUsed" fill="#7C3AED" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Table */}
-        <div className="mt-6 overflow-hidden rounded-2xl border border-white/60 bg-white/85 backdrop-blur-xl">
+        {/* Table (solid bg, higher z) */}
+        <div className="mt-6 overflow-hidden rounded-2xl border border-indigo-100 bg-white z-10 relative">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-indigo-50/90 backdrop-blur-md">
+              <thead className="sticky top-0 bg-indigo-50">
                 <tr className="text-indigo-900">
-                  <th className="px-4 py-3 text-left">
-                    <SortBtn field="userId">User ID</SortBtn>
-                  </th>
-                  <th className="px-4 py-3 text-left">
-                    <SortBtn field="email">Email</SortBtn>
-                  </th>
-                  <th className="px-4 py-3 text-left">
-                    <SortBtn field="companyName">Company</SortBtn>
-                  </th>
-                  <th className="px-4 py-3 text-left">
-                    <SortBtn field="tier">Plan</SortBtn>
-                  </th>
-                  <th className="px-4 py-3 text-left">
-                    <SortBtn field="tokensUsed">Tokens Today</SortBtn>
-                  </th>
+                  <th className="px-4 py-3 text-left"><SortBtn field="userId">User ID</SortBtn></th>
+                  <th className="px-4 py-3 text-left"><SortBtn field="email">Email</SortBtn></th>
+                  <th className="px-4 py-3 text-left"><SortBtn field="companyName">Company</SortBtn></th>
+                  <th className="px-4 py-3 text-left"><SortBtn field="tier">Plan</SortBtn></th>
+                  <th className="px-4 py-3 text-left"><SortBtn field="tokensUsed">Tokens Today</SortBtn></th>
                   <th className="px-4 py-3 text-left">Last Reset</th>
                   <th className="px-4 py-3 text-left">Actions</th>
                 </tr>
@@ -532,13 +481,11 @@ export default function AdminDashboard() {
                 {loading ? (
                   [...Array(6)].map((_, i) => (
                     <tr key={i} className="border-t">
-                      <td className="px-4 py-3"><div className="h-4 w-40 bg-gray-200 rounded animate-pulse" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-56 bg-gray-200 rounded animate-pulse" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-40 bg-gray-200 rounded animate-pulse" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-24 bg-gray-200 rounded animate-pulse" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-16 bg-gray-200 rounded animate-pulse" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-28 bg-gray-200 rounded animate-pulse" /></td>
-                      <td className="px-4 py-3"><div className="h-8 w-40 bg-gray-200 rounded animate-pulse" /></td>
+                      {Array.from({ length: 7 }).map((__, j) => (
+                        <td key={j} className="px-4 py-3">
+                          <div className="h-4 w-40 bg-gray-200 rounded animate-pulse" />
+                        </td>
+                      ))}
                     </tr>
                   ))
                 ) : paginated.length === 0 ? (
@@ -552,17 +499,13 @@ export default function AdminDashboard() {
                   </tr>
                 ) : (
                   paginated.map((r) => (
-                    <tr key={`${r.userId}`} className={`border-t ${r.tokensUsed > 1000 ? "bg-yellow-50/60" : ""}`}>
+                    <tr key={r.userId} className={`border-t ${r.tokensUsed > 1000 ? "bg-yellow-50/60" : ""}`}>
                       <td className="px-4 py-2 font-mono text-[11px] text-gray-600">{r.userId}</td>
                       <td className="px-4 py-2">{r.email}</td>
                       <td className="px-4 py-2">{r.companyName}</td>
                       <td className="px-4 py-2">
                         <div className="flex items-center gap-2">
-                          <Badge
-                            tone={
-                              r.tier === "pro-max" ? "purple" : r.tier === "pro" ? "green" : "gray"
-                            }
-                          >
+                          <Badge tone={r.tier === "pro-max" ? "purple" : r.tier === "pro" ? "green" : "gray"}>
                             {r.tier === "pro-max" ? "Pro Max" : r.tier.charAt(0).toUpperCase() + r.tier.slice(1)}
                           </Badge>
                           {r.companyId && (
@@ -579,9 +522,7 @@ export default function AdminDashboard() {
                         </div>
                       </td>
                       <td className="px-4 py-2">{r.tokensUsed}</td>
-                      <td className="px-4 py-2">
-                        {r.lastReset?.toDate?.().toLocaleString?.() || "N/A"}
-                      </td>
+                      <td className="px-4 py-2">{r.lastReset?.toDate?.().toLocaleString?.() || "N/A"}</td>
                       <td className="px-4 py-2">
                         <div className="flex flex-wrap gap-2">
                           <button
@@ -618,9 +559,7 @@ export default function AdminDashboard() {
             >
               <FaArrowLeft /> Prev
             </button>
-            <span className="text-sm text-gray-600">
-              Page {pageSafe} of {totalPages}
-            </span>
+            <span className="text-sm text-gray-600">Page {pageSafe} of {totalPages}</span>
             <button
               disabled={pageSafe === totalPages}
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
@@ -645,10 +584,7 @@ export default function AdminDashboard() {
               for this company? This action cannot be undone.
             </p>
             <div className="mt-4 flex gap-2 justify-end">
-              <button
-                onClick={() => setConfirm(null)}
-                className="rounded-full bg-gray-200 px-4 py-2 hover:bg-gray-300"
-              >
+              <button onClick={() => setConfirm(null)} className="rounded-full bg-gray-200 px-4 py-2 hover:bg-gray-300">
                 Cancel
               </button>
               <button
