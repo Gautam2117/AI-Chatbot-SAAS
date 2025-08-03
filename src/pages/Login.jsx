@@ -1,6 +1,5 @@
-// src/pages/Login.jsx
 import { useContext, useEffect, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { AuthContext } from "../context/AuthProvider";
 import { auth } from "../firebase";
 import {
@@ -9,32 +8,86 @@ import {
   signInWithPopup,
   sendPasswordResetEmail,
 } from "firebase/auth";
+import AuthLayout from "../components/AuthLayout";
 import { FcGoogle } from "react-icons/fc";
 
-/** Minimal toast (no extra packages) */
+/** Premium toast */
 function Toast({ notice, onClose }) {
   if (!notice) return null;
-  const base =
-    "fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-lg shadow-lg text-sm";
-  const tone =
-    notice.type === "success"
-      ? "bg-emerald-600 text-white"
-      : notice.type === "warn"
-      ? "bg-amber-600 text-white"
-      : "bg-rose-600 text-white";
+  const tones = {
+    success: "from-emerald-500 to-emerald-600",
+    warn: "from-amber-500 to-amber-600",
+    error: "from-rose-500 to-rose-600",
+  };
   return (
-    <div className={`${base} ${tone}`}>
-      <div className="flex items-center gap-3">
-        <span>{notice.message}</span>
-        <button
-          className="ml-2 text-white/80 hover:text-white"
-          onClick={onClose}
-          aria-label="Close"
-        >
-          ✕
-        </button>
+    <div className="fixed top-4 left-1/2 z-[60] -translate-x-1/2">
+      <div className={`rounded-xl bg-gradient-to-r ${tones[notice.type] || tones.error} px-4 py-2 text-white shadow-xl`}>
+        <div className="flex items-center gap-3">
+          <span className="text-sm">{notice.message}</span>
+          <button
+            className="text-white/90 hover:text-white"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
       </div>
     </div>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-medium text-white/80">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function TextInput(props) {
+  return (
+    <input
+      {...props}
+      className={
+        "w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 " +
+        "text-white placeholder-white/40 outline-none " +
+        "focus:border-fuchsia-400/40 focus:ring-4 focus:ring-fuchsia-500/10 " +
+        (props.className || "")
+      }
+    />
+  );
+}
+
+function PrimaryButton({ loading, children, ...rest }) {
+  return (
+    <button
+      {...rest}
+      disabled={loading || rest.disabled}
+      className={
+        "group relative w-full overflow-hidden rounded-xl px-4 py-3 " +
+        "font-semibold text-white transition " +
+        "disabled:opacity-60 " +
+        "bg-gradient-to-r from-fuchsia-500 to-indigo-500 hover:from-fuchsia-400 hover:to-indigo-400"
+      }
+    >
+      <span className="relative z-10">
+        {loading ? "Signing in…" : children}
+      </span>
+      <span className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-20 bg-white transition" />
+    </button>
+  );
+}
+
+function OutlineButton({ children, ...rest }) {
+  return (
+    <button
+      {...rest}
+      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white/90 hover:bg-white/10 transition"
+    >
+      {children}
+    </button>
   );
 }
 
@@ -56,14 +109,9 @@ export default function Login() {
   useEffect(() => {
     if (!user) return;
     const isActive = user?.claims?.active === true || user?.active === true;
-    const isEmailVerified =
-      user?.emailVerified === true || user?.claims?.email_verified === true;
-
-    if (isEmailVerified && isActive) {
-      navigate("/");
-    } else {
-      navigate("/verify");
-    }
+    // Our gate is only `active` now
+    if (isActive) navigate("/");
+    else navigate("/verify");
   }, [user, navigate]);
 
   const loginWithEmail = async () => {
@@ -101,16 +149,14 @@ export default function Login() {
       return;
     }
     try {
-      // Optional: send a continue URL back to your site after reset
       const actionCodeSettings = {
         url: `${window.location.origin}/login`,
         handleCodeInApp: false,
       };
       await sendPasswordResetEmail(auth, email.trim(), actionCodeSettings);
-      // For privacy, don't reveal whether the email exists
       show("success", "If an account exists, a reset link has been sent.");
-    } catch (e) {
-      // Still show generic success to avoid account enumeration
+    } catch {
+      // Avoid enumeration; show same message
       show("success", "If an account exists, a reset link has been sent.");
     }
   };
@@ -123,74 +169,69 @@ export default function Login() {
     <>
       <Toast notice={notice} onClose={() => setNotice(null)} />
 
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 p-4">
-        <div className="bg-white shadow-2xl rounded-2xl p-10 max-w-md w-full space-y-6 transform transition-all duration-500 hover:scale-105">
-          <h2 className="text-3xl font-extrabold text-center text-purple-700 drop-shadow-lg">
-            Welcome Back!
-          </h2>
-          <p className="text-center text-gray-500 mb-4">
-            Please sign in to continue
-          </p>
+      <AuthLayout
+        title="Welcome back"
+        subtitle="Sign in to manage your chatbot, prompts, and analytics."
+        footer={
+          <>
+            Don’t have an account?{" "}
+            <Link to="/signup" className="text-fuchsia-300 hover:text-fuchsia-200 underline underline-offset-4">
+              Create one
+            </Link>
+          </>
+        }
+      >
+        <div className="space-y-5">
+          <Field label="Email">
+            <TextInput
+              placeholder="you@company.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={onKeyDown}
+              autoComplete="email"
+            />
+          </Field>
 
-          <input
-            className="border-2 border-gray-200 px-4 py-3 w-full rounded-lg focus:ring-2 focus:ring-purple-400 focus:outline-none transition duration-300"
-            placeholder="📧 Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={onKeyDown}
-          />
-          <input
-            className="border-2 border-gray-200 px-4 py-3 w-full rounded-lg focus:ring-2 focus:ring-purple-400 focus:outline-none transition duration-300"
-            type="password"
-            placeholder="🔒 Password"
-            value={pass}
-            onChange={(e) => setPass(e.target.value)}
-            onKeyDown={onKeyDown}
-          />
+          <Field label="Password">
+            <TextInput
+              type="password"
+              placeholder="••••••••"
+              value={pass}
+              onChange={(e) => setPass(e.target.value)}
+              onKeyDown={onKeyDown}
+              autoComplete="current-password"
+            />
+            <div className="mt-2 text-right">
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                className="text-xs text-fuchsia-300 hover:text-fuchsia-200 underline underline-offset-4"
+              >
+                Forgot password?
+              </button>
+            </div>
+          </Field>
 
-          <div className="flex justify-end -mt-2">
-            <button
-              type="button"
-              onClick={handleForgotPassword}
-              className="text-sm text-purple-600 hover:text-purple-800 underline"
-            >
-              Forgot password?
-            </button>
+          <PrimaryButton onClick={loginWithEmail} loading={busy}>
+            Sign in
+          </PrimaryButton>
+
+          <div className="flex items-center gap-3 py-2 text-white/40">
+            <span className="h-px w-full bg-white/10" />
+            <span className="text-xs">or</span>
+            <span className="h-px w-full bg-white/10" />
           </div>
 
-          <button
-            className="bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold px-4 py-3 rounded-lg w-full shadow-md hover:from-purple-700 hover:to-pink-700 transition duration-300 disabled:opacity-60"
-            onClick={loginWithEmail}
-            disabled={busy}
-          >
-            {busy ? "Signing in..." : "Sign In"}
-          </button>
-
-          <div className="flex items-center justify-center gap-2">
-            <span className="h-px w-24 bg-gray-300"></span>
-            <span className="text-gray-500">or</span>
-            <span className="h-px w-24 bg-gray-300"></span>
-          </div>
-
-          <button
-            className="flex items-center justify-center gap-3 bg-white border border-gray-300 px-4 py-3 rounded-lg w-full hover:shadow-lg transition duration-300 disabled:opacity-60"
-            onClick={loginWithGoogle}
-            disabled={googleLoginLoading}
-          >
-            <FcGoogle className="text-2xl" />
-            <span className="font-medium text-gray-700">
-              {googleLoginLoading ? "Opening…" : "Sign In with Google"}
-            </span>
-          </button>
-
-          <p className="text-sm text-center mt-4 text-gray-600">
-            Don&apos;t have an account?{" "}
-            <a href="/signup" className="text-purple-600 font-medium hover:underline">
-              Sign up
-            </a>
-          </p>
+          <OutlineButton onClick={loginWithGoogle} disabled={googleLoginLoading}>
+            <div className="flex items-center justify-center gap-3">
+              <FcGoogle className="text-xl" />
+              <span className="font-medium">
+                {googleLoginLoading ? "Opening…" : "Continue with Google"}
+              </span>
+            </div>
+          </OutlineButton>
         </div>
-      </div>
+      </AuthLayout>
     </>
   );
 }

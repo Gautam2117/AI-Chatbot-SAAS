@@ -1,68 +1,190 @@
 // src/pages/Verify.jsx
-import { useContext, useEffect, useState, useCallback } from "react";
+import { useContext, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { AuthContext } from "../context/AuthProvider";
 import { auth, functions } from "../firebase";
 import { httpsCallable } from "firebase/functions";
 import { useNavigate } from "react-router-dom";
+import AuthLayout from "../components/AuthLayout";
 
-/** Minimal toast UI (no extra deps) */
+/** Premium toast (consistent with Login) */
 function Toast({ notice, onClose }) {
   if (!notice) return null;
-  const base =
-    "fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-lg shadow-lg text-sm";
-  const tone =
-    notice.type === "success"
-      ? "bg-emerald-600 text-white"
-      : notice.type === "warn"
-      ? "bg-amber-600 text-white"
-      : "bg-rose-600 text-white";
+  const tones = {
+    success: "from-emerald-500 to-emerald-600",
+    warn: "from-amber-500 to-amber-600",
+    error: "from-rose-500 to-rose-600",
+  };
   return (
-    <div className={`${base} ${tone}`}>
-      <div className="flex items-center gap-3">
-        <span>{notice.message}</span>
-        <button
-          className="ml-2 text-white/80 hover:text-white"
-          onClick={onClose}
-          aria-label="Close"
-        >
-          ✕
-        </button>
+    <div className="fixed top-4 left-1/2 z-[60] -translate-x-1/2">
+      <div className={`rounded-xl bg-gradient-to-r ${tones[notice.type] || tones.error} px-4 py-2 text-white shadow-xl`}>
+        <div className="flex items-center gap-3">
+          <span className="text-sm">{notice.message}</span>
+          <button
+            className="text-white/90 hover:text-white"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
+/** 6-box OTP input with paste/backspace/navigation support */
+function OtpInput({ length = 6, value, onChange, disabled }) {
+  const refs = useRef([]);
+  const vals = useMemo(() => value.padEnd(length, " ").split("").slice(0, length), [value, length]);
+
+  const setAt = (idx, char) => {
+    const clean = (char || "").replace(/\D/g, "").slice(-1); // last digit
+    const before = value.slice(0, idx);
+    const after = value.slice(idx + 1);
+    const next = (before + (clean || "") + after).slice(0, length).replace(/\s/g, "");
+    onChange(next);
+  };
+
+  const onKeyDown = (e, i) => {
+    if (disabled) return;
+
+    if (e.key === "Backspace") {
+      if (!vals[i].trim() && i > 0) {
+        // move left if empty
+        refs.current[i - 1]?.focus();
+        setAt(i - 1, "");
+      } else {
+        setAt(i, "");
+      }
+      e.preventDefault();
+      return;
+    }
+    if (e.key === "ArrowLeft" && i > 0) {
+      refs.current[i - 1]?.focus();
+      e.preventDefault();
+    }
+    if (e.key === "ArrowRight" && i < length - 1) {
+      refs.current[i + 1]?.focus();
+      e.preventDefault();
+    }
+  };
+
+  const onInput = (e, i) => {
+    if (disabled) return;
+    const v = e.target.value;
+    if (!v) return;
+    if (/\D/.test(v)) {
+      e.target.value = vals[i].trim();
+      return;
+    }
+    setAt(i, v);
+    if (v && i < length - 1) refs.current[i + 1]?.focus();
+  };
+
+  const onPaste = (e) => {
+    if (disabled) return;
+    const t = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, length);
+    if (!t) return;
+    onChange(t);
+    // focus last filled
+    const idx = Math.min(t.length, length) - 1;
+    setTimeout(() => refs.current[idx]?.focus(), 0);
+    e.preventDefault();
+  };
+
+  return (
+    <div className="flex items-center gap-2" onPaste={onPaste}>
+      {Array.from({ length }).map((_, i) => (
+        <input
+          key={i}
+          ref={(el) => (refs.current[i] = el)}
+          inputMode="numeric"
+          pattern="[0-9]*"
+          maxLength={1}
+          disabled={disabled}
+          defaultValue={vals[i].trim()}
+          onKeyDown={(e) => onKeyDown(e, i)}
+          onInput={(e) => onInput(e, i)}
+          className={
+            "h-12 w-12 rounded-xl border border-white/10 bg-white/5 text-center text-lg " +
+            "text-white outline-none transition " +
+            "focus:border-fuchsia-400/40 focus:ring-4 focus:ring-fuchsia-500/10 " +
+            (disabled ? "opacity-60" : "")
+          }
+          aria-label={`Digit ${i + 1}`}
+        />
+      ))}
+    </div>
+  );
+}
+
+function OutlineButton({ children, ...rest }) {
+  return (
+    <button
+      {...rest}
+      className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-white/90 hover:bg-white/10 transition disabled:opacity-60"
+    >
+      {children}
+    </button>
+  );
+}
+
+function PrimaryButton({ loading, children, ...rest }) {
+  return (
+    <button
+      {...rest}
+      disabled={loading || rest.disabled}
+      className={
+        "group relative overflow-hidden rounded-xl px-4 py-3 " +
+        "font-semibold text-white transition " +
+        "disabled:opacity-60 " +
+        "bg-gradient-to-r from-fuchsia-500 to-indigo-500 hover:from-fuchsia-400 hover:to-indigo-400"
+      }
+    >
+      <span className="relative z-10">{loading ? "Please wait…" : children}</span>
+      <span className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-20 bg-white transition" />
+    </button>
+  );
+}
+
 export default function Verify() {
   const { user } = useContext(AuthContext);
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState("");           // raw string of digits
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [cooldown, setCooldown] = useState(0);    // resend timer (s)
   const navigate = useNavigate();
 
-  const show = useCallback((type, message, ms = 3500) => {
+  const show = useCallback((type, message, ms = 3000) => {
     setNotice({ type, message });
     if (ms) setTimeout(() => setNotice(null), ms);
   }, []);
 
-  // If already verified & active, go home
+  // Gate: if already active, go home
   useEffect(() => {
     if (!user) return;
     const isActive = user?.claims?.active === true || user?.active === true;
-    const isEmailVerified =
-      user?.emailVerified === true || user?.claims?.email_verified === true;
-
-    if (isEmailVerified && isActive) navigate("/");
+    if (isActive) navigate("/");
   }, [user, navigate]);
+
+  // Cooldown ticker
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const id = setInterval(() => setCooldown((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(id);
+  }, [cooldown]);
 
   if (!user) return null;
 
   const requestOtp = async () => {
+    if (cooldown > 0) return;
     setSending(true);
     try {
       const fn = httpsCallable(functions, "requestEmailOtp");
       await fn({});
-      show("success", "OTP sent to your email.");
+      setCooldown(30); // 30s resend gate; adjust as desired
+      show("success", `OTP sent to ${user.email}.`);
     } catch (e) {
       const msg =
         e?.message?.includes("App Check")
@@ -85,13 +207,11 @@ export default function Verify() {
       const res = await fn({ code: code.trim() });
 
       if (res?.data?.ok) {
-        // Backend marks emailVerified + sets claims; pull them in and go.
         try {
           await auth.currentUser?.reload();
           await auth.currentUser?.getIdToken(true);
         } catch {}
         show("success", "Verification successful! Redirecting…", 1200);
-        // small delay for the Auth state listener to update context
         setTimeout(() => navigate("/"), 800);
       } else {
         show("error", res?.data?.message || "Invalid or expired code.");
@@ -103,66 +223,48 @@ export default function Verify() {
     }
   };
 
-  const onChangeCode = (e) => {
-    const onlyDigits = e.target.value.replace(/\D/g, "").slice(0, 6);
-    setCode(onlyDigits);
-  };
-
-  const onKeyDown = (e) => {
-    if (e.key === "Enter") verifyOtp();
-  };
-
-  // Optional: auto-send OTP on first visit
-  // useEffect(() => { requestOtp(); }, []); // uncomment if desired
-
   return (
     <>
       <Toast notice={notice} onClose={() => setNotice(null)} />
 
-      <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full">
-          <h2 className="text-2xl font-bold">Verify your account</h2>
+      <AuthLayout
+        title="Verify your account"
+        subtitle={
+          <>
+            We’ve sent a one-time code to <span className="text-white font-semibold">{user.email}</span>. 
+            Enter it below to activate your workspace.
+          </>
+        }
+        footer={
+          <>
+            Need help? <span className="text-white/70">Contact support</span>
+          </>
+        }
+      >
+        <div className="space-y-6">
+          {/* code input + verify */}
+          <div className="flex flex-col items-center gap-4">
+            <OtpInput value={code} onChange={setCode} disabled={verifying} />
+            <PrimaryButton onClick={verifyOtp} loading={verifying}>
+              Verify & continue
+            </PrimaryButton>
+          </div>
 
-          <p className="mt-2 text-sm text-gray-600">
-            We’ll verify your account with a one-time code sent to{" "}
-            <b>{user.email}</b>.
-          </p>
+          {/* resend row */}
+          <div className="flex items-center justify-center gap-3">
+            <span className="text-xs text-white/50">Didn’t get the code?</span>
+            <OutlineButton onClick={requestOtp} disabled={sending || cooldown > 0}>
+              {sending ? "Sending…" : cooldown > 0 ? `Resend in ${cooldown}s` : "Resend OTP"}
+            </OutlineButton>
+          </div>
 
-          <div className="mt-6">
-            <label className="block text-sm font-medium text-gray-700">
-              Enter 6-digit OTP
-            </label>
-            <div className="mt-2 flex gap-2">
-              <input
-                className="border px-3 py-2 rounded w-full tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={6}
-                placeholder="123456"
-                value={code}
-                onChange={onChangeCode}
-                onKeyDown={onKeyDown}
-                disabled={verifying}
-              />
-              <button
-                className="px-4 py-2 rounded bg-black text-white disabled:opacity-60"
-                onClick={verifyOtp}
-                disabled={verifying}
-              >
-                {verifying ? "Verifying…" : "Verify"}
-              </button>
-            </div>
-
-            <button
-              className="mt-3 text-sm underline disabled:opacity-60"
-              onClick={requestOtp}
-              disabled={sending}
-            >
-              {sending ? "Sending…" : "Send OTP"}
-            </button>
+          {/* small hint bubbles */}
+          <div className="mt-2 grid gap-2 text-xs text-white/45">
+            <div>• Check spam/promotions if you don’t see the email.</div>
+            <div>• Codes expire in 10 minutes. You can request a new one anytime.</div>
           </div>
         </div>
-      </div>
+      </AuthLayout>
     </>
   );
 }

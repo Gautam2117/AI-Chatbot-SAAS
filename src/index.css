@@ -11,3 +11,9 @@
     transform: rotate(360deg);
   }
 }
+
+/* Improve font rendering */
+html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+/* Selection matches accent */
+::selection { background: rgba(217, 70, 239, .35); color: #fff; }

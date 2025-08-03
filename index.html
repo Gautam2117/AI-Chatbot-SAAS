@@ -1,40 +1,165 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Charset & Viewport -->
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Title -->
     <title>Botify – Smart AI Chatbot for Instant Support</title>
-    
-    <!-- Updated Favicon -->
+
+    <!-- Favicons -->
     <link rel="icon" type="image/x-icon" href="/Botify_logo.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+    <link rel="mask-icon" href="/icons/safari-pinned-tab.svg" color="#7C3AED" />
 
-    <!-- Primary Meta Tags -->
-    <meta name="title" content="Botify – Smart AI Chatbot for Instant Support">
-    <meta name="description" content="Botify helps businesses deliver instant customer support with AI-powered chatbot solutions. Get started today!">
-    <meta name="keywords" content="Botify, AI chatbot, customer support, instant replies, smart bot">
-    <meta name="author" content="Botify Team">
-    <meta name="robots" content="index, follow">
+    <!-- Brand & Theming -->
+    <meta name="theme-color" content="#7C3AED" />
+    <meta name="color-scheme" content="light dark" />
 
-    <!-- Open Graph / Facebook -->
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="https://ai-chatbot-saas-eight.vercel.app/">
-    <meta property="og:title" content="Botify – Smart AI Chatbot for Instant Support">
-    <meta property="og:description" content="Deliver instant customer support with Botify’s AI-powered chatbot solutions. Seamless integration, 24/7 service.">
-    <meta property="og:image" content="/Botify_logo.png">
+    <!-- Primary Meta -->
+    <meta name="title" content="Botify – Smart AI Chatbot for Instant Support" />
+    <meta
+      name="description"
+      content="Botify helps businesses deliver instant customer support with AI-powered chatbot solutions. Get started today!"
+    />
+    <meta
+      name="keywords"
+      content="Botify, AI chatbot, customer support, instant replies, smart bot, conversational AI, support automation"
+    />
+    <meta name="author" content="Botify Team" />
+    <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://ai-chatbot-saas-eight.vercel.app/" />
+    <meta property="og:title" content="Botify – Smart AI Chatbot for Instant Support" />
+    <meta
+      property="og:description"
+      content="Deliver instant customer support with Botify’s AI-powered chatbot solutions. Seamless integration, 24/7 service."
+    />
+    <meta property="og:image" content="https://ai-chatbot-saas-eight.vercel.app/Botify_logo.png" />
+    <meta property="og:site_name" content="Botify" />
 
     <!-- Twitter -->
-    <meta property="twitter:card" content="summary_large_image">
-    <meta property="twitter:url" content="https://ai-chatbot-saas-eight.vercel.app/">
-    <meta property="twitter:title" content="Botify – Smart AI Chatbot for Instant Support">
-    <meta property="twitter:description" content="Deliver instant customer support with Botify’s AI-powered chatbot solutions. Seamless integration, 24/7 service.">
-    <meta property="twitter:image" content="/Botify_logo.png">
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://ai-chatbot-saas-eight.vercel.app/" />
+    <meta name="twitter:title" content="Botify – Smart AI Chatbot for Instant Support" />
+    <meta
+      name="twitter:description"
+      content="Deliver instant customer support with Botify’s AI-powered chatbot solutions. Seamless integration, 24/7 service."
+    />
+    <meta name="twitter:image" content="https://ai-chatbot-saas-eight.vercel.app/Botify_logo.png" />
 
     <!-- Canonical -->
     <link rel="canonical" href="https://ai-chatbot-saas-eight.vercel.app/" />
+
+    <!-- Performance: preconnects (Firebase + Razorpay + fonts if any) -->
+    <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="dns-prefetch" href="https://identitytoolkit.googleapis.com" />
+    <link rel="dns-prefetch" href="https://firestore.googleapis.com" />
+    <link rel="dns-prefetch" href="https://checkout.razorpay.com" />
+
+    <!-- PWA (optional; add files in /public) -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- Structured Data (Organization + SoftwareApplication) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "Botify",
+        "url": "https://ai-chatbot-saas-eight.vercel.app/",
+        "logo": "https://ai-chatbot-saas-eight.vercel.app/Botify_logo.png",
+        "sameAs": [
+          "https://twitter.com/", 
+          "https://www.facebook.com/"
+        ]
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Botify",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web",
+        "offers": {
+          "@type": "Offer",
+          "priceCurrency": "INR",
+          "price": "0",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    </script>
+
+    <!-- Minimal critical styles for initial paint (glass loader) -->
+    <style>
+      .boot-wrap {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background:
+          radial-gradient(1200px 600px at 20% -10%, rgba(99,102,241,.14), transparent),
+          radial-gradient(1000px 500px at 80% 0, rgba(236,72,153,.14), transparent);
+      }
+      .boot-card {
+        position: relative;
+        max-width: 420px;
+        width: 100%;
+        border-radius: 20px;
+        background: rgba(255,255,255,.8);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255,255,255,.6);
+        box-shadow: 0 10px 40px rgba(0,0,0,.08);
+        padding: 28px 24px;
+        text-align: center;
+      }
+      .boot-ring {
+        width: 48px;
+        height: 48px;
+        border: 4px solid #a5b4fc;
+        border-top-color: transparent;
+        border-radius: 999px;
+        margin: 0 auto 10px;
+        animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+
+    <!-- NOTE: Avoid strict CSP here because Razorpay injects iframes/scripts.
+    A strict CSP may break checkout unless you explicitly allow it. -->
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Root -->
+    <div id="root">
+      <!-- Friendly boot loader (will be replaced by React) -->
+      <div class="boot-wrap">
+        <div class="boot-card">
+          <div class="boot-ring"></div>
+          <div style="font-weight:700;color:#111827">Starting Botify…</div>
+          <div style="font-size:12px;color:#374151;margin-top:4px">your AI support cockpit is loading</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- App -->
     <script type="module" src="/src/main.jsx"></script>
-    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+    <!-- Razorpay (load non-blocking; it initializes when you open checkout) -->
+    <script src="https://checkout.razorpay.com/v1/checkout.js" async></script>
+
+    <noscript>
+      <style>
+        .nojs { padding: 16px; max-width: 680px; margin: 20px auto; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, "Helvetica Neue", Arial; }
+      </style>
+      <div class="nojs">
+        <strong>Botify requires JavaScript.</strong> Please enable JavaScript in your browser to continue.
+      </div>
+    </noscript>
   </body>
 </html>

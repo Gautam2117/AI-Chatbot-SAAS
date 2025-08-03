@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useMemo } from "react";
 import { AuthContext } from "../context/AuthProvider";
 import { db } from "../firebase";
 import {
@@ -8,7 +8,6 @@ import {
   doc,
   onSnapshot,
   query,
-  orderBy,
   updateDoc,
   serverTimestamp,
 } from "firebase/firestore";
@@ -17,67 +16,122 @@ import autoTable from "jspdf-autotable";
 import Papa from "papaparse";
 import DOMPurify from "dompurify";
 
+/* ---------- tiny atoms for consistent glass theme ---------- */
+const Glass = ({ className = "", children }) => (
+  <div className={`rounded-3xl border border-white/10 bg-white/5 backdrop-blur shadow-[0_18px_60px_rgba(0,0,0,0.25)] ${className}`}>
+    {children}
+  </div>
+);
+
+const IconBtn = ({ onClick, children, title, disabled, className = "" }) => (
+  <button
+    title={title}
+    onClick={onClick}
+    disabled={disabled}
+    className={`inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/90 hover:bg-white/10 active:scale-[0.98] transition disabled:opacity-50 ${className}`}
+  >
+    {children}
+  </button>
+);
+
+const ChipToggle = ({ active, onClick, children }) => (
+  <button
+    onClick={onClick}
+    className={`rounded-full px-3 py-1 text-xs font-medium border transition ${
+      active
+        ? "border-fuchsia-400/40 bg-fuchsia-500/15 text-white"
+        : "border-white/10 bg-white/5 text-white/80 hover:bg-white/10"
+    }`}
+  >
+    {children}
+  </button>
+);
+
+/* ------------------------------ component ------------------------------ */
 const FAQForm = ({ faqs, setFaqs }) => {
+  const { user } = useContext(AuthContext);
+
+  // CRUD state
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [editId, setEditId] = useState(null);
   const [editQuestion, setEditQuestion] = useState("");
   const [editAnswer, setEditAnswer] = useState("");
+
+  // UI state
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [expandedFAQ, setExpandedFAQ] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("date"); // "date" | "question"
   const [currentPage, setCurrentPage] = useState(1);
-  const [sortBy, setSortBy] = useState("date"); // "date" or "question"
-  const faqsPerPage = 5;
-  const { user } = useContext(AuthContext);
+  const [importProgress, setImportProgress] = useState(0);
 
+  const faqsPerPage = 6;
+
+  /* ------------------------ live Firestore listener ------------------------ */
   useEffect(() => {
     if (!user?.uid || !user?.companyId) return;
-
     const faqsCollection = collection(db, "faqs", user.companyId, "list");
-    const q = query(faqsCollection);
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedFaqs = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setFaqs(fetchedFaqs);
+    const qy = query(faqsCollection); // order handled in UI for flexibility
+    const unsub = onSnapshot(qy, (snap) => {
+      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setFaqs(list);
     });
-
-    return () => unsubscribe();
+    return () => unsub();
   }, [user, setFaqs]);
 
+  /* --------------------------- filtered + sorted --------------------------- */
+  const filteredSorted = useMemo(() => {
+    const term = searchTerm.toLowerCase();
+    const filtered = (faqs || []).filter(
+      (f) => f.q?.toLowerCase().includes(term) || f.a?.toLowerCase().includes(term)
+    );
+    if (sortBy === "question") {
+      return filtered.sort((a, b) => (a.q || "").localeCompare(b.q || ""));
+    }
+    // default: by createdAt desc
+    return filtered.sort(
+      (a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)
+    );
+  }, [faqs, searchTerm, sortBy]);
+
+  const totalPages = Math.ceil(filteredSorted.length / faqsPerPage) || 1;
+  const currentFaqs = filteredSorted.slice(
+    (currentPage - 1) * faqsPerPage,
+    currentPage * faqsPerPage
+  );
+
+  /* -------------------------------- actions -------------------------------- */
   const addFAQ = async () => {
     if (!user?.uid) return alert("🔒 Please log in.");
+    const q = question.trim();
+    const a = answer.trim();
+    if (!q || !a) return;
 
-    const isDuplicate = faqs.some(
-      (f) =>
-        f.q.toLowerCase().trim() === question.toLowerCase().trim() &&
-        f.a.toLowerCase().trim() === answer.toLowerCase().trim()
+    const dup = faqs.some(
+      (f) => f.q?.toLowerCase().trim() === q.toLowerCase() && f.a?.toLowerCase().trim() === a.toLowerCase()
     );
-
-    if (isDuplicate) {
+    if (dup) {
       alert("❌ Duplicate FAQ already exists.");
       return;
     }
 
-    if (question.trim() && answer.trim()) {
-      try {
-        setIsSaving(true);
-        await addDoc(collection(db, "faqs", user.companyId, "list"), {
-          q: DOMPurify.sanitize(question),
-          a: DOMPurify.sanitize(answer),
-          createdAt: serverTimestamp(),
-        });
-        setQuestion("");
-        setAnswer("");
-      } catch (err) {
-        console.error("❌ Failed to add FAQ:", err.message);
-      } finally {
-        setIsSaving(false);
-      }
+    try {
+      setIsSaving(true);
+      await addDoc(collection(db, "faqs", user.companyId, "list"), {
+        q: DOMPurify.sanitize(q),
+        a: DOMPurify.sanitize(a),
+        createdAt: serverTimestamp(),
+      });
+      setQuestion("");
+      setAnswer("");
+      setCurrentPage(1);
+    } catch (e) {
+      console.error("add FAQ error", e);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -86,79 +140,57 @@ const FAQForm = ({ faqs, setFaqs }) => {
     setEditQuestion(faq.q);
     setEditAnswer(faq.a);
   };
-
   const cancelEdit = () => {
     setEditId(null);
     setEditQuestion("");
     setEditAnswer("");
   };
-
   const saveEdit = async () => {
-    if (!user?.uid || !editId || !editQuestion.trim() || !editAnswer.trim()) return;
+    if (!user?.uid || !editId) return;
+    const q = editQuestion.trim();
+    const a = editAnswer.trim();
+    if (!q || !a) return;
+
     try {
       setIsSaving(true);
       await updateDoc(doc(db, "faqs", user.companyId, "list", editId), {
-        q: DOMPurify.sanitize(editQuestion.trim()),
-        a: DOMPurify.sanitize(editAnswer.trim()),
+        q: DOMPurify.sanitize(q),
+        a: DOMPurify.sanitize(a),
         updatedAt: serverTimestamp(),
       });
       cancelEdit();
-    } catch (err) {
-      console.error("❌ Failed to update FAQ:", err.message);
+    } catch (e) {
+      console.error("update FAQ error", e);
     } finally {
       setIsSaving(false);
     }
   };
 
-  const confirmDelete = (faqId) => setConfirmDeleteId(faqId);
+  const toggleExpand = (id) => setExpandedFAQ((prev) => (prev === id ? null : id));
+
   const handleDelete = async () => {
     if (!user?.uid || !confirmDeleteId) return;
     try {
       setIsDeleting(true);
       await deleteDoc(doc(db, "faqs", user.companyId, "list", confirmDeleteId));
       setConfirmDeleteId(null);
-    } catch (err) {
-      console.error("❌ Failed to delete FAQ:", err.message);
+    } catch (e) {
+      console.error("delete FAQ error", e);
     } finally {
       setIsDeleting(false);
     }
   };
 
-  const toggleExpand = (faqId) => {
-    setExpandedFAQ((prev) => (prev === faqId ? null : faqId));
-  };
-
-  // 🔥 Filter, sort, paginate
-  const filteredFaqs = faqs
-    .filter((faq) =>
-      faq.q?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      faq.a?.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-    .sort((a, b) => {
-      if (sortBy === "date") {
-        const dateA = a.createdAt?.seconds || 0;
-        const dateB = b.createdAt?.seconds || 0;
-        return dateB - dateA;
-      } else if (sortBy === "question") {
-        return a.q?.localeCompare(b.q);
-      }
-      return 0;
-    });
-
-  const indexOfLast = currentPage * faqsPerPage;
-  const indexOfFirst = indexOfLast - faqsPerPage;
-  const currentFaqs = filteredFaqs.slice(indexOfFirst, indexOfLast);
-  const totalPages = Math.ceil(filteredFaqs.length / faqsPerPage);
-
+  /* -------------------------------- export --------------------------------- */
   const exportToCSV = () => {
     const rows = [["Question", "Answer", "Created At"]];
-    faqs.forEach((faq) => {
+    (faqs || []).forEach((f) =>
       rows.push([
-        `"${faq.q.replace(/"/g, '""')}"`,
-        `"${faq.a.replace(/"/g, '""')}"`,
-        faq.createdAt?.toDate?.().toLocaleString() || "N/A",
-      ]);
-    });
+        `"${(f.q || "").replace(/"/g, '""')}"`,
+        `"${(f.a || "").replace(/"/g, '""')}"`,
+        f.createdAt?.toDate?.()?.toLocaleString?.() || "N/A",
+      ])
+    );
     const csv = rows.map((r) => r.join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const a = document.createElement("a");
@@ -168,229 +200,255 @@ const FAQForm = ({ faqs, setFaqs }) => {
   };
 
   const exportToPDF = () => {
-    const doc = new jsPDF();
-    doc.text("📋 FAQs Report", 14, 20);
-    autoTable(doc, {
+    const docx = new jsPDF();
+    docx.text("📋 FAQs Report", 14, 20);
+    autoTable(docx, {
       head: [["Question", "Answer", "Created At"]],
-      body: faqs.map((faq) => [
-        faq.q,
-        faq.a,
-        faq.createdAt?.toDate?.().toLocaleString() || "N/A",
+      body: (faqs || []).map((f) => [
+        f.q || "",
+        f.a || "",
+        f.createdAt?.toDate?.()?.toLocaleString?.() || "N/A",
       ]),
+      styles: { cellWidth: "wrap" },
+      columnStyles: { 0: { cellWidth: 70 }, 1: { cellWidth: 100 }, 2: { cellWidth: 30 } },
+      startY: 28,
     });
-    doc.save("faqs.pdf");
+    docx.save("faqs.pdf");
   };
 
-  const [importProgress, setImportProgress] = useState(0);
-
-  const handleFileUpload = async (event) => {
-    const file = event.target.files[0];
+  /* -------------------------------- import --------------------------------- */
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0];
     if (!file || !user?.uid) return;
 
-    setImportProgress(0); // Reset progress
+    setImportProgress(0);
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
-      complete: async (results) => {
-        const rows = results.data;
-        const totalRows = rows.length;
-        let processed = 0;
+      complete: async ({ data }) => {
+        const rows = Array.isArray(data) ? data : [];
+        const total = rows.length || 1;
+        let ok = 0;
         let skipped = 0;
 
-        rows.sort((a, b) => a.Question?.localeCompare(b.Question));
+        // Sort by question for stability
+        rows.sort((a, b) => (a.Question || "").localeCompare(b.Question || ""));
 
-        try {
-          for (const row of rows) {
-            const question = row["Question"]?.trim();
-            const answer = row["Answer"]?.trim();
+        for (const row of rows) {
+          const q = (row["Question"] || "").trim();
+          const a = (row["Answer"] || "").trim();
+          if (!q || !a) continue;
 
-            if (!question || !answer) continue;
-
-            const isDuplicate = faqs.some(
-              (f) =>
-                f.q.toLowerCase().trim() === question.toLowerCase() &&
-                f.a.toLowerCase().trim() === answer.toLowerCase()
-            );
-
-            if (isDuplicate) {
-              skipped++;
-              continue;
-            }
-
-            await addDoc(collection(db, "faqs", user.companyId, "list"), {
-              q: DOMPurify.sanitize(question),
-              a: DOMPurify.sanitize(answer),
-              createdAt: serverTimestamp(),
-            });
-
-            processed++;
-            setImportProgress(Math.round((processed / totalRows) * 100));
+          const dup = faqs.some(
+            (f) => f.q?.toLowerCase().trim() === q.toLowerCase() && f.a?.toLowerCase().trim() === a.toLowerCase()
+          );
+          if (dup) {
+            skipped++;
+            continue;
           }
 
-          alert(`✅ Imported ${processed} FAQs. Skipped ${skipped} duplicate(s).`);
-          setImportProgress(100);
-        } catch (err) {
-          console.error("❌ Error importing FAQs:", err.message);
-          alert("❌ Failed to import some FAQs.");
+          try {
+            await addDoc(collection(db, "faqs", user.companyId, "list"), {
+              q: DOMPurify.sanitize(q),
+              a: DOMPurify.sanitize(a),
+              createdAt: serverTimestamp(),
+            });
+            ok++;
+          } catch {
+            // ignore partial failures; keep going
+          } finally {
+            setImportProgress(Math.round(((ok + skipped) / total) * 100));
+          }
         }
+        alert(`✅ Imported ${ok} FAQs. Skipped ${skipped} duplicate(s).`);
+        setImportProgress(100);
       },
     });
   };
 
+  /* ---------------------------------- UI ----------------------------------- */
   return (
-    <div className="bg-gradient-to-br from-white via-blue-50 to-indigo-100 rounded-3xl shadow-2xl p-6 md:p-10 space-y-6 hover:scale-[1.02] transition">
-      <h2 className="text-3xl font-extrabold text-indigo-700 text-center">📋 Manage FAQs</h2>
+    <Glass className="p-6 md:p-8 text-white/90">
+      {/* heading + actions */}
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <h2 className="text-2xl md:text-3xl font-semibold tracking-tight">📋 Manage FAQs</h2>
 
-      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          <IconBtn onClick={exportToCSV} title="Export CSV">⬇️ CSV</IconBtn>
+          <IconBtn onClick={exportToPDF} title="Export PDF">📄 PDF</IconBtn>
+
+          <label className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/90 hover:bg-white/10 cursor-pointer">
+            📤 Import CSV
+            <input type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
+          </label>
+        </div>
+      </div>
+
+      {/* search / sort */}
+      <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto_auto] items-center">
         <input
           type="text"
-          placeholder="🔍 Search FAQs..."
-          className="w-full md:w-1/2 border px-4 py-2 rounded-lg focus:ring-2 focus:ring-indigo-400"
+          placeholder="🔍 Search FAQs…"
           value={searchTerm}
           onChange={(e) => {
             setSearchTerm(e.target.value);
             setCurrentPage(1);
           }}
+          className="w-full rounded-2xl border border-white/15 bg-white/5 px-4 py-3 placeholder-white/40 text-white focus:outline-none focus:ring-2 focus:ring-fuchsia-400/40"
         />
-        <div className="flex gap-2">
-          <button
-            onClick={() => setSortBy("date")}
-            className={`px-3 py-1 rounded-lg text-sm font-semibold transition ${
-              sortBy === "date" ? "bg-indigo-600 text-white" : "bg-white border border-indigo-300"
-            }`}
-          >
-            📅 Date
-          </button>
-          <button
-            onClick={() => setSortBy("question")}
-            className={`px-3 py-1 rounded-lg text-sm font-semibold transition ${
-              sortBy === "question" ? "bg-indigo-600 text-white" : "bg-white border border-indigo-300"
-            }`}
-          >
-            🔤 A-Z
-          </button>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={exportToCSV} className="bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700">⬇️ CSV</button>
-          <button onClick={exportToPDF} className="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700">📄 PDF</button>
-        </div>
-      </div>
 
-      <div className="grid gap-4">
-        {currentFaqs.length === 0 ? (
-          <p className="text-gray-500 text-center italic">No FAQs found. Try searching or add new ones!</p>
-        ) : (
-          currentFaqs.map((faq) => (
-            <div key={faq.id} className="bg-white border border-indigo-200 rounded-lg p-4 shadow hover:shadow-lg">
-              <div onClick={() => toggleExpand(faq.id)} className="cursor-pointer flex justify-between items-center">
-                <p className="font-semibold text-indigo-800">Q: {faq.q}</p>
-                <span>{expandedFAQ === faq.id ? "🔼" : "🔽"}</span>
-              </div>
-              {expandedFAQ === faq.id && (
-                <>
-                  {editId === faq.id ? (
-                    <div className="space-y-2 mt-2">
-                      <input
-                        type="text"
-                        className="w-full border px-3 py-2 rounded-lg focus:ring-2 focus:ring-indigo-400"
-                        value={editQuestion}
-                        onChange={(e) => setEditQuestion(e.target.value)}
-                      />
-                      <input
-                        type="text"
-                        className="w-full border px-3 py-2 rounded-lg focus:ring-2 focus:ring-indigo-400"
-                        value={editAnswer}
-                        onChange={(e) => setEditAnswer(e.target.value)}
-                      />
-                      <div className="flex gap-2">
-                        <button onClick={saveEdit} disabled={isSaving} className={`bg-green-600 text-white px-4 py-2 rounded-lg ${isSaving ? "opacity-50" : ""}`}>💾 Save</button>
-                        <button onClick={cancelEdit} className="bg-gray-400 text-white px-4 py-2 rounded-lg">❌ Cancel</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <p className="text-indigo-700 mt-2">A: {faq.a}</p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Created: {faq.createdAt?.toDate()?.toLocaleString() || "N/A"}
-                      </p>
-                    </>
-                  )}
-                  {editId !== faq.id && (
-                    <div className="flex gap-2 mt-2">
-                      <button
-                        onClick={() => startEdit(faq)}
-                        className="bg-yellow-500 text-white px-3 py-1 rounded-lg"
-                        title="Edit FAQ"
-                      >
-                        ✏️ Edit
-                      </button>
-                      <button
-                        onClick={() => confirmDelete(faq.id)}
-                        className="bg-red-600 text-white px-3 py-1 rounded-lg"
-                        title="Delete FAQ"
-                      >
-                        🗑️ Delete
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          ))
-        )}
-      </div>
-
-      {totalPages > 1 && (
-        <div className="flex justify-center gap-4">
-          <button onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))} disabled={currentPage === 1} className="px-3 py-1 bg-indigo-300 rounded disabled:opacity-50">◀ Prev</button>
-          <span>{`Page ${currentPage} of ${totalPages}`}</span>
-          <button onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="px-3 py-1 bg-indigo-300 rounded disabled:opacity-50">Next ▶</button>
+        <div className="flex items-center justify-end gap-2">
+          <ChipToggle active={sortBy === "date"} onClick={() => setSortBy("date")}>📅 Date</ChipToggle>
+          <ChipToggle active={sortBy === "question"} onClick={() => setSortBy("question")}>🔤 A–Z</ChipToggle>
         </div>
-      )}
 
-      {/* Bulk Import CSV UI */}
-      <div className="mt-6">
-        <label className="block font-medium text-sm text-indigo-700 mb-1">
-          📤 Import FAQs (CSV only)
-        </label>
-        <input
-          type="file"
-          accept=".csv"
-          onChange={handleFileUpload}
-          className="block w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:border-0 file:bg-indigo-600 file:text-white file:rounded-lg hover:file:bg-indigo-700"
-        />
-        <p className="text-xs mt-1 text-gray-500">
-          File must have columns: <strong>Question</strong>, <strong>Answer</strong>
-        </p>
-        {importProgress > 0 && (
-          <div className="mt-2 w-full bg-gray-200 rounded-full h-4">
+        {importProgress > 0 && importProgress < 100 && (
+          <div className="h-3 w-full overflow-hidden rounded-full bg-white/10">
             <div
-              className="bg-indigo-600 h-4 rounded-full"
+              className="h-full bg-gradient-to-r from-fuchsia-500 to-indigo-500 transition-all"
               style={{ width: `${importProgress}%` }}
             />
           </div>
         )}
       </div>
 
-      <div className="grid md:grid-cols-3 gap-4 mt-6">
-        <input type="text" placeholder="Enter question" value={question} onChange={(e) => setQuestion(e.target.value)} className="border px-4 py-3 rounded-lg" />
-        <input type="text" placeholder="Enter answer" value={answer} onChange={(e) => setAnswer(e.target.value)} className="border px-4 py-3 rounded-lg" />
-        <button onClick={addFAQ} disabled={isSaving} className={`bg-gradient-to-r from-indigo-500 to-purple-500 text-white px-4 py-3 rounded-lg ${isSaving ? "opacity-50" : ""}`}>➕ Add FAQ</button>
+      {/* list */}
+      <div className="mt-5 grid gap-3">
+        {currentFaqs.length === 0 ? (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center text-white/60">
+            No FAQs yet. Add your first one below!
+          </div>
+        ) : (
+          currentFaqs.map((faq) => {
+            const open = expandedFAQ === faq.id;
+            const isEditing = editId === faq.id;
+            return (
+              <div
+                key={faq.id}
+                className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden"
+              >
+                <button
+                  onClick={() => toggleExpand(faq.id)}
+                  className="w-full text-left px-5 py-4 hover:bg-white/5 flex items-start justify-between gap-4"
+                >
+                  <div className="font-medium text-white/90">
+                    <span className="opacity-70">Q:</span> {faq.q}
+                  </div>
+                  <span className="text-white/60">{open ? "▲" : "▼"}</span>
+                </button>
+
+                {open && (
+                  <div className="px-5 pb-5 pt-2 border-t border-white/10">
+                    {isEditing ? (
+                      <div className="grid gap-3">
+                        <input
+                          className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/40"
+                          value={editQuestion}
+                          onChange={(e) => setEditQuestion(e.target.value)}
+                          placeholder="Edit question"
+                        />
+                        <textarea
+                          rows={3}
+                          className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/40"
+                          value={editAnswer}
+                          onChange={(e) => setEditAnswer(e.target.value)}
+                          placeholder="Edit answer"
+                        />
+                        <div className="flex items-center gap-2">
+                          <IconBtn onClick={saveEdit} disabled={isSaving}>💾 Save</IconBtn>
+                          <IconBtn onClick={cancelEdit}>❌ Cancel</IconBtn>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="text-white/80">
+                          <span className="opacity-70">A:</span> {faq.a}
+                        </div>
+                        <div className="mt-2 text-xs text-white/50">
+                          Created: {faq.createdAt?.toDate?.()?.toLocaleString?.() || "N/A"}
+                        </div>
+                        <div className="mt-3 flex items-center gap-2">
+                          <IconBtn onClick={() => startEdit(faq)}>✏️ Edit</IconBtn>
+                          <IconBtn onClick={() => setConfirmDeleteId(faq.id)} className="border-rose-400/30 text-rose-200">🗑️ Delete</IconBtn>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
       </div>
 
+      {/* pagination */}
+      {totalPages > 1 && (
+        <div className="mt-5 flex items-center justify-center gap-3">
+          <IconBtn
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+          >
+            ◀ Prev
+          </IconBtn>
+          <span className="text-sm text-white/70">
+            Page {currentPage} of {totalPages}
+          </span>
+          <IconBtn
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+          >
+            Next ▶
+          </IconBtn>
+        </div>
+      )}
+
+      {/* add new */}
+      <div className="mt-6 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+        <input
+          type="text"
+          placeholder="Enter question"
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          className="w-full rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/40"
+        />
+        <input
+          type="text"
+          placeholder="Enter answer"
+          value={answer}
+          onChange={(e) => setAnswer(e.target.value)}
+          className="w-full rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/40"
+        />
+        <button
+          onClick={addFAQ}
+          disabled={isSaving}
+          className={`rounded-2xl bg-gradient-to-r from-fuchsia-500 to-indigo-500 px-4 py-3 text-sm font-medium shadow hover:from-fuchsia-400 hover:to-indigo-400 active:scale-[0.98] transition ${isSaving ? "opacity-60" : ""}`}
+        >
+          ➕ Add FAQ
+        </button>
+      </div>
+
+      {/* delete confirm */}
       {confirmDeleteId && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg max-w-sm w-full text-center">
-            <h3 className="text-lg font-bold text-red-600">⚠️ Confirm Deletion</h3>
-            <p>Are you sure you want to delete this FAQ?</p>
-            <div className="flex justify-center gap-4">
-              <button onClick={handleDelete} disabled={isDeleting} className={`bg-red-600 text-white px-4 py-2 rounded ${isDeleting ? "opacity-50" : ""}`}>Yes, Delete</button>
-              <button onClick={() => setConfirmDeleteId(null)} className="bg-gray-300 text-black px-4 py-2 rounded">Cancel</button>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6 text-white shadow-2xl">
+            <h3 className="text-lg font-semibold text-rose-200">⚠️ Confirm Deletion</h3>
+            <p className="mt-1 text-sm text-white/70">
+              Are you sure you want to delete this FAQ?
+            </p>
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <IconBtn onClick={() => setConfirmDeleteId(null)}>Cancel</IconBtn>
+              <IconBtn
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="border-rose-400/30 text-rose-200"
+              >
+                {isDeleting ? "Deleting…" : "Yes, Delete"}
+              </IconBtn>
             </div>
           </div>
         </div>
       )}
-    </div>
+    </Glass>
   );
 };
 

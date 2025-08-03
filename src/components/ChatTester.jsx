@@ -1,12 +1,10 @@
-import React, { useContext, useState, useEffect } from "react";
+import React, { useContext, useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import { AuthContext } from "../context/AuthProvider";
 import { db } from "../firebase";
 import {
   doc,
   getDoc,
-  setDoc,
-  Timestamp,
   collection,
   onSnapshot,
 } from "firebase/firestore";
@@ -16,123 +14,144 @@ import remarkGfm from "remark-gfm";
 import { TypeAnimation } from "react-type-animation";
 import rehypeSanitize from "rehype-sanitize";
 
+/* ------------------- tiny UI atoms (no new deps) ------------------- */
+const GlassCard = ({ children, className = "" }) => (
+  <div
+    className={
+      "rounded-3xl border border-white/10 bg-white/5 backdrop-blur " +
+      "shadow-[0_20px_60px_rgba(0,0,0,0.25)] " +
+      className
+    }
+  >
+    {children}
+  </div>
+);
+
+const IconButton = ({ onClick, children, title, disabled }) => (
+  <button
+    onClick={onClick}
+    title={title}
+    disabled={disabled}
+    className={
+      "rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/90 " +
+      "hover:bg-white/10 active:scale-[0.98] transition disabled:opacity-50"
+    }
+  >
+    {children}
+  </button>
+);
+
+/* ------------------------------------------------------------------ */
+
 const ChatTester = () => {
   const { user } = useContext(AuthContext);
   const [faqs, setFaqs] = useState([]);
   const [userQ, setUserQ] = useState("");
-  const [botAnswer, setBotAnswer] = useState("");
+  const [messages, setMessages] = useState([]); // {role:'user'|'assistant', content:string}
   const [loading, setLoading] = useState(false);
+
+  // quotas
   const [tokensUsed, setTokensUsed] = useState(0);
   const [dailyLimit, setDailyLimit] = useState(1000);
   const [tier, setTier] = useState("free");
-  const [showPricing, setShowPricing] = useState(false);
   const [subscriptionExpiryWarning, setSubscriptionExpiryWarning] = useState("");
+
+  // pricing
+  const [showPricing, setShowPricing] = useState(false);
 
   const navigate = useNavigate();
 
   const BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  (import.meta.env.DEV
-    ? "http://localhost:5000"
-    : "https://ai-chatbot-backend-h669.onrender.com");
+    import.meta.env.VITE_API_BASE_URL ||
+    (import.meta.env.DEV
+      ? "http://localhost:5000"
+      : "https://ai-chatbot-backend-h669.onrender.com");
 
+  /* --------------------- load company usage + faqs --------------------- */
   useEffect(() => {
     if (!user?.uid) return;
 
     let unsubscribeUsage = null;
     let unsubscribeFAQ = null;
 
-    const fetchUserCompany = async () => {
+    (async () => {
       try {
         const userRef = doc(db, "users", user.uid);
         const userSnap = await getDoc(userRef);
         const userData = userSnap.data();
 
-        if (!userData?.companyId) {
-          console.warn("⚠️ No companyId found for user.");
-          return;
-        }
+        if (!userData?.companyId) return;
 
         const companyId = userData.companyId;
         const usageRef = doc(db, "companies", companyId);
         const faqCollection = collection(db, "faqs", companyId, "list");
 
-        // ✅ Listen to real-time usage & plan info
-        unsubscribeUsage = onSnapshot(usageRef, (snapshot) => {
-          if (!snapshot.exists()) return;
+        // usage listener
+        unsubscribeUsage = onSnapshot(
+          usageRef,
+          (snapshot) => {
+            if (!snapshot.exists()) return;
+            const data = snapshot.data();
 
-          const data = snapshot.data();
+            // daily reset awareness
+            const today = new Date().toISOString().slice(0, 10);
+            const lastResetDate = data.lastReset?.toDate?.()?.toISOString?.().slice(0, 10);
+            const isToday = lastResetDate === today;
 
-          // UTC-safe date handling
-          const today = new Date().toISOString().slice(0, 10);
-          const lastResetDate = data.lastReset?.toDate()?.toISOString?.().slice(0, 10);
-          const isToday = lastResetDate === today;
+            setTokensUsed(isToday ? data.tokensUsedToday || 0 : 0);
 
-          setTokensUsed(isToday ? data.tokensUsedToday || 0 : 0);
+            const currentTier = data.tier || "free";
+            let currentLimit = 1000;
+            if (currentTier === "pro") currentLimit = 10000;
+            else if (currentTier === "pro-max") currentLimit = 66000;
 
-          const currentTier = data.tier || "free";
+            setTier(currentTier);
+            setDailyLimit(currentLimit);
 
-          let currentLimit = 1000; // default for free
-          if (currentTier === "pro") currentLimit = 10000;
-          else if (currentTier === "pro-max") currentLimit = 66000;
+            if (currentTier === "pro-max") {
+              const now = new Date();
+              const usageMonth = data.monthlyUsageReset?.toDate?.()?.getMonth?.();
+              const usageYear = data.monthlyUsageReset?.toDate?.()?.getFullYear?.();
+              const isSameMonth =
+                usageMonth === now.getMonth() && usageYear === now.getFullYear();
 
-          setTier(currentTier);
-          setDailyLimit(currentLimit);
-
-          if (currentTier === "pro-max") {
-            const now = new Date();
-            const currentMonth = now.getMonth();
-            const currentYear = now.getFullYear();
-            const usageMonth = data.monthlyUsageReset?.toDate?.().getMonth?.();
-            const usageYear = data.monthlyUsageReset?.toDate?.().getFullYear?.();
-
-            const tokensThisMonth = data.tokensUsedThisMonth || 0;
-            const maxMonthlyTokens = 2000000; // 2M tokens cap
-
-            const isSameMonth = usageMonth === currentMonth && usageYear === currentYear;
-            if (isSameMonth && tokensThisMonth >= maxMonthlyTokens) {
-              setDailyLimit(0); // freeze for rest of the month
+              const tokensThisMonth = data.tokensUsedThisMonth || 0;
+              const maxMonthlyTokens = 2_000_000;
+              if (isSameMonth && tokensThisMonth >= maxMonthlyTokens) {
+                setDailyLimit(0); // freeze for rest of month
+              }
             }
-          }
 
-          const expiresAt = data.subscriptionExpiresAt?.toDate?.();
-          if (expiresAt) {
-            const now = new Date();
-            const daysLeft = Math.ceil((expiresAt - now) / (1000 * 60 * 60 * 24));
-
-            if (daysLeft <= 5 && daysLeft > 0) {
-              setSubscriptionExpiryWarning(
-                `⚠️ Your subscription expires in ${daysLeft} day${daysLeft > 1 ? "s" : ""}.`
-              );
-            } else if (daysLeft <= 0) {
-              setSubscriptionExpiryWarning("⚠️ Your subscription has expired.");
+            const expiresAt = data.subscriptionExpiresAt?.toDate?.();
+            if (expiresAt) {
+              const now = new Date();
+              const daysLeft = Math.ceil((expiresAt - now) / 86_400_000);
+              if (daysLeft <= 5 && daysLeft > 0) {
+                setSubscriptionExpiryWarning(
+                  `⚠️ Your subscription expires in ${daysLeft} day${daysLeft > 1 ? "s" : ""}.`
+                );
+              } else if (daysLeft <= 0) {
+                setSubscriptionExpiryWarning("⚠️ Your subscription has expired.");
+              } else {
+                setSubscriptionExpiryWarning("");
+              }
             } else {
               setSubscriptionExpiryWarning("");
             }
-          } else {
-            setSubscriptionExpiryWarning("");
-          }
-        }, (error) => {
-          console.error("❌ Error with usage snapshot:", error.message);
-        });
+          },
+          (error) => console.error("usage snapshot error:", error.message)
+        );
 
-        // ✅ Listen to FAQs
+        // faq listener
         unsubscribeFAQ = onSnapshot(
           faqCollection,
-          (snapshot) => {
-            const updatedFaqs = snapshot.docs.map((doc) => doc.data());
-            setFaqs(updatedFaqs);
-          },
-          (error) => {
-            console.error("❌ Error with FAQ snapshot:", error.message);
-          }
+          (snapshot) => setFaqs(snapshot.docs.map((d) => d.data())),
+          (error) => console.error("faq snapshot error:", error.message)
         );
       } catch (err) {
-        console.error("❌ Error in fetchUserCompany:", err.message);
+        console.error("fetch company error:", err.message);
       }
-    };
-
-    fetchUserCompany();
+    })();
 
     return () => {
       if (unsubscribeUsage) unsubscribeUsage();
@@ -140,15 +159,41 @@ const ChatTester = () => {
     };
   }, [user?.uid]);
 
+  /* ------------------------- derived UI state -------------------------- */
+  const percentUsed = useMemo(
+    () => (dailyLimit ? (tokensUsed / dailyLimit) * 100 : 100),
+    [tokensUsed, dailyLimit]
+  );
+  const isNearLimit = percentUsed >= 80 && percentUsed < 100;
+  const isOverLimit = dailyLimit === 0 || tokensUsed >= dailyLimit;
+
+  useEffect(() => {
+    if (isNearLimit && !isOverLimit) setShowPricing(true);
+  }, [isNearLimit, isOverLimit]);
+
+  /* --------------------------- chat handlers --------------------------- */
+  const pushUser = (content) =>
+    setMessages((m) => [...m, { role: "user", content }]);
+  const pushAssistantChunk = (chunk) =>
+    setMessages((m) => {
+      const copy = [...m];
+      if (!copy.length || copy[copy.length - 1].role !== "assistant") {
+        copy.push({ role: "assistant", content: "" });
+      }
+      copy[copy.length - 1].content += chunk;
+      return copy;
+    });
+
   const testChat = async () => {
     if (!user?.uid) {
       alert("🔒 Please log in to use the chatbot.");
       return;
     }
-    if (!userQ.trim()) return;
+    if (!userQ.trim() || isOverLimit) return;
 
-    setBotAnswer("");
     setLoading(true);
+    pushUser(userQ);
+    setUserQ("");
 
     try {
       const response = await fetch(`${BASE_URL}/api/chat`, {
@@ -161,35 +206,32 @@ const ChatTester = () => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        setBotAnswer(errorData.error || "Something went wrong.");
+        const errorData = await response.json().catch(() => ({}));
+        pushAssistantChunk(
+          errorData.error || "❌ Something went wrong. Please try again."
+        );
         setLoading(false);
         return;
       }
 
       if (!response.body) {
-        setBotAnswer("⚠️ Streaming not supported by this browser.");
+        pushAssistantChunk("⚠️ Streaming not supported by this browser.");
         setLoading(false);
         return;
       }
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let streamedText = "";
 
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-
-        const chunk = decoder.decode(value, { stream: true });
-        streamedText += chunk;
-        setBotAnswer((prev) => prev + chunk); // Live update
+        pushAssistantChunk(decoder.decode(value, { stream: true }));
       }
-
       setLoading(false);
     } catch (err) {
-      console.error("🔥 Stream error:", err);
-      setBotAnswer("❌ Failed to fetch response.");
+      console.error("stream error:", err);
+      pushAssistantChunk("❌ Failed to fetch response.");
       setLoading(false);
     }
   };
@@ -199,15 +241,11 @@ const ChatTester = () => {
       alert("🔒 Please log in to upgrade.");
       return;
     }
-
     try {
-      // 🔐 Send only plan and userId — NOT amount
       const res = await axios.post(`${BASE_URL}/api/create-order`, {
         plan,
         userId: user.uid,
-        companyId: user.companyId || "", // if you're using companyId from context
       });
-
       const { orderId, amount: razorAmount, currency } = res.data;
 
       const options = {
@@ -217,21 +255,18 @@ const ChatTester = () => {
         name: "Botify",
         description: `Upgrade to ${plan} Plan`,
         order_id: orderId,
-        handler: async function (response) {
+        handler: async (response) => {
           const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = response;
-
           if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
             alert("❌ Missing payment details. Redirecting...");
             return navigate("/");
           }
-
           try {
             const verifyRes = await axios.post(`${BASE_URL}/api/verify-payment`, {
               razorpay_order_id,
               razorpay_payment_id,
               razorpay_signature,
             });
-
             if (verifyRes.data.success) {
               alert("✅ Payment Verified! Upgrading...");
               setTier(plan);
@@ -252,20 +287,19 @@ const ChatTester = () => {
             alert("❌ Payment verification failed.");
           }
         },
-
         prefill: {
           name: user.displayName || "User",
-          email: user.email || "test@example.com",
+          email: user.email || "user@example.com",
         },
-        theme: { color: "#4f46e5" },
+        theme: { color: "#6d28d9" },
         notes: { billing_label: "Botify" },
-        modal: { ondismiss: () => alert("❌ Payment cancelled.") },
+        modal: { ondismiss: () => {} },
       };
 
       const rzp = new window.Razorpay(options);
       rzp.on("payment.failed", (response) => {
-        console.error("❌ Payment failed:", response.error);
-        alert(`❌ Payment failed: ${response.error.description}`);
+        console.error("Payment failed:", response.error);
+        alert(`❌ Payment failed: ${response.error?.description || "Unknown error"}`);
       });
       rzp.open();
     } catch (err) {
@@ -274,166 +308,213 @@ const ChatTester = () => {
     }
   };
 
-  const percentUsed = (tokensUsed / dailyLimit) * 100;
-  const isNearLimit = percentUsed >= 80;
-  const isOverLimit = tokensUsed >= dailyLimit;
+  const copyLastAnswer = async () => {
+    const last = [...messages].reverse().find((m) => m.role === "assistant");
+    if (!last?.content) return;
+    try {
+      await navigator.clipboard.writeText(last.content);
+    } catch {}
+  };
 
-  useEffect(() => {
-    if (isNearLimit && !isOverLimit) setShowPricing(true);
-  }, [isNearLimit, isOverLimit]);
+  const clearChat = () => setMessages([]);
 
+  /* ------------------------------- UI -------------------------------- */
   return (
-    <div className="bg-gradient-to-br from-white via-blue-50 to-indigo-100 rounded-3xl shadow-2xl p-6 md:p-10 space-y-6 hover:scale-[1.02] transition">
-      <h2 className="text-3xl font-extrabold text-indigo-700 text-center">🤖 Test Chatbot</h2>
+    <GlassCard className="p-6 md:p-8 text-white/90">
+      {/* Title / limits */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <h2 className="text-2xl md:text-3xl font-semibold tracking-tight">
+          🤖 Test your assistant
+        </h2>
+        <div className="flex items-center gap-2">
+          <span
+            className={
+              "inline-flex items-center rounded-full px-3 py-1 text-xs " +
+              "border border-white/10 bg-white/5"
+            }
+          >
+            Plan:&nbsp;
+            <strong className="ml-1">
+              {tier === "pro-max" ? "Pro Max" : tier[0]?.toUpperCase() + tier.slice(1)}
+            </strong>
+          </span>
+          <span className="inline-flex items-center rounded-full px-3 py-1 text-xs border border-emerald-400/20 bg-emerald-400/10 text-emerald-200">
+            🔋 {tokensUsed}/{dailyLimit} tokens
+          </span>
+          <IconButton onClick={() => setShowPricing(true)}>💳 Upgrade</IconButton>
+        </div>
+      </div>
+
       {subscriptionExpiryWarning && (
-        <div className="p-3 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 text-sm rounded text-center mt-2">
+        <div className="mt-3 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-sm text-amber-100">
           {subscriptionExpiryWarning}
         </div>
       )}
-      {!user?.uid ? (
-        <p className="text-red-600 text-center">🔒 Please log in to use the chatbot.</p>
-      ) : (
-        <>
-          {isOverLimit && (
-            <div className="p-3 bg-red-100 border-l-4 border-red-500 text-red-800 text-sm rounded">
-              ❌ Token limit reached ({tokensUsed}/{dailyLimit}). Upgrade plan to continue.
+
+      {/* Chat surface */}
+      <div className="mt-6 grid gap-4">
+        {/* Messages */}
+        <div className="rounded-2xl border border-white/10 bg-black/30 p-4 max-h-[420px] overflow-y-auto">
+          {messages.length === 0 && (
+            <div className="text-center text-white/50 text-sm py-10">
+              Ask a question about your FAQs to see how Botify responds.
             </div>
           )}
-          {tier === "pro-max" && dailyLimit === 0 && (
-            <div className="p-3 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 text-sm rounded mt-2">
-              🚫 Monthly cap reached (2M tokens). Renew next month or <a href="/contact" className="underline font-semibold">contact support</a>.
-            </div>
-          )}
-          {!isOverLimit && isNearLimit && (
-            <div className="p-3 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 text-sm rounded">
-              ⚠️ You've used {percentUsed.toFixed(1)}% of your token limit.
-            </div>
-          )}
-          <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-            <input
-              type="text"
-              className="w-full md:w-2/3 border px-4 py-2 rounded-lg focus:ring-2 focus:ring-indigo-400"
-              placeholder="Ask something..."
-              value={userQ}
-              onChange={(e) => setUserQ(e.target.value)}
-              disabled={isOverLimit}
-            />
+
+          <div className="space-y-4">
+            {messages.map((m, i) => (
+              <div
+                key={i}
+                className={
+                  "max-w-[85%] rounded-2xl px-4 py-3 " +
+                  (m.role === "user"
+                    ? "ml-auto bg-white/10 border border-white/10"
+                    : "mr-auto bg-gradient-to-br from-fuchsia-600/25 to-indigo-600/25 border border-fuchsia-400/20")
+                }
+              >
+                <div className="text-xs mb-1 opacity-60">
+                  {m.role === "user" ? "You" : "Botify"}
+                </div>
+                <div className="prose prose-invert prose-sm max-w-none">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>
+                    {m.content}
+                  </ReactMarkdown>
+                </div>
+              </div>
+            ))}
+
+            {loading && (
+              <div className="mr-auto max-w-[85%] rounded-2xl px-4 py-3 bg-gradient-to-br from-fuchsia-600/25 to-indigo-600/25 border border-fuchsia-400/20">
+                <div className="text-xs mb-1 opacity-60">Botify</div>
+                <span className="inline-flex items-center text-white/80">
+                  <TypeAnimation
+                    sequence={["Thinking…", 800, "Thinking…", 800]}
+                    speed={50}
+                    repeat={Infinity}
+                    wrapper="span"
+                  />
+                  <span className="ml-2 h-2 w-2 rounded-full bg-fuchsia-400 animate-pulse"></span>
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Input row */}
+        <div className="flex flex-col md:flex-row gap-3">
+          <input
+            type="text"
+            className={
+              "w-full rounded-2xl border border-white/15 bg-white/5 px-4 py-3 " +
+              "placeholder-white/40 text-white focus:outline-none focus:ring-2 focus:ring-fuchsia-400/40"
+            }
+            placeholder="Ask something…"
+            value={userQ}
+            onChange={(e) => setUserQ(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && testChat()}
+            disabled={isOverLimit || loading}
+          />
+          <div className="flex items-center gap-2">
             <button
               onClick={testChat}
-              disabled={loading || isOverLimit}
-              className={`px-5 py-2 rounded-lg text-white transition ${
-                isOverLimit
-                  ? "bg-gray-400 cursor-not-allowed"
-                  : "bg-indigo-600 hover:bg-indigo-700"
-              }`}
+              disabled={loading || isOverLimit || !userQ.trim()}
+              className={
+                "rounded-2xl bg-gradient-to-r from-fuchsia-500 to-indigo-500 px-5 py-3 text-sm font-medium " +
+                "shadow hover:from-fuchsia-400 hover:to-indigo-400 active:scale-[0.98] transition " +
+                (loading || isOverLimit || !userQ.trim() ? "opacity-60" : "")
+              }
             >
-              {loading ? "Thinking..." : "💬 Ask Bot"}
+              {loading ? "Thinking…" : "Send →"}
             </button>
+            <IconButton onClick={copyLastAnswer} title="Copy last answer">📋 Copy</IconButton>
+            <IconButton onClick={clearChat} title="Clear conversation">🧹 Reset</IconButton>
           </div>
-          {loading && (
-            <div className="mt-4 text-center text-indigo-600">
-              <TypeAnimation
-                sequence={["🤖 Typing...", 1000]}
-                wrapper="span"
-                speed={50}
-                style={{ fontSize: '1.25rem', display: 'inline-block' }}
-                repeat={Infinity}
-              />
-            </div>
-          )}
-          {botAnswer && (
-            <div className="p-4 bg-white border border-indigo-200 rounded-lg shadow mt-4">
-              <strong className="text-indigo-800">Bot:</strong>
-              <div className="prose prose-indigo mt-2">
-                <ReactMarkdown
-                  children={botAnswer}
-                  remarkPlugins={[remarkGfm]}
-                  rehypePlugins={[rehypeSanitize]}
-                />
-              </div>
-            </div>
-          )}
-          <div className="mt-6 space-y-2">
-            <div className="text-sm font-medium text-gray-600">
-              🔋 Token Usage: {tokensUsed} / {dailyLimit}
-            </div>
-            <div className="relative w-full h-4 bg-gray-200 rounded-full overflow-hidden">
-              <div
-                className={`h-full transition-all duration-700 ease-in-out ${
-                  percentUsed >= 100
-                    ? "bg-red-500"
-                    : percentUsed >= 80
-                    ? "bg-yellow-400"
-                    : "bg-green-500"
-                }`}
-                style={{ width: `${Math.min(percentUsed, 100)}%` }}
-              ></div>
-            </div>
-            <div className="text-xs font-bold mt-1">
-              Plan:
-              <span
-                className={`ml-2 px-2 py-1 rounded-full text-xs font-bold ${
-                  tier === "pro-max"
-                    ? "bg-purple-100 text-purple-700"
-                    : tier === "pro"
-                    ? "bg-green-100 text-green-700"
-                    : "bg-gray-100 text-gray-600"
-                }`}
-              >
-                {tier === "pro-max" ? "Pro Max" : tier.charAt(0).toUpperCase() + tier.slice(1)}
-              </span>
-            </div>
+        </div>
 
-            <button
-              onClick={() => setShowPricing(true)}
-              className="mt-3 bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-4 py-2 rounded hover:from-purple-600 hover:to-indigo-700 transition"
-            >
-              💳 Upgrade Plan
-            </button>
+        {/* Usage meter */}
+        <div className="mt-1">
+          <div className="relative h-2 w-full overflow-hidden rounded-full bg-white/10">
+            <div
+              className={
+                "h-full transition-all duration-700 " +
+                (percentUsed >= 100
+                  ? "bg-rose-500"
+                  : percentUsed >= 80
+                  ? "bg-amber-400"
+                  : "bg-emerald-400")
+              }
+              style={{ width: `${Math.min(percentUsed, 100)}%` }}
+            />
           </div>
-        </>
-      )}
+          <div className="mt-2 flex items-center justify-between text-xs text-white/60">
+            <span>Usage</span>
+            <span>{Math.min(percentUsed, 100).toFixed(1)}%</span>
+          </div>
+        </div>
+      </div>
 
+      {/* Pricing modal */}
       {showPricing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md relative animate-fadeIn">
-            <button
-              onClick={() => setShowPricing(false)}
-              className="absolute top-3 right-3 text-gray-500 hover:text-gray-900 text-lg"
-            >
-              ✖
-            </button>
-            <h2 className="text-2xl font-bold text-center text-indigo-700 mb-6">
-              🚀 Upgrade Your Plan
-            </h2>
-            <div className="space-y-4">
-              <div className="border border-indigo-300 rounded-lg p-4 hover:shadow-xl">
-                <h3 className="text-lg font-semibold text-indigo-600">Pro Plan</h3>
-                <p className="text-sm text-gray-600">📈 10,000 tokens/day</p>
-                <p className="text-indigo-700 font-bold mt-1">₹149/month</p>
-                <button
-                  onClick={() => handleCheckout("pro")}
-                  className="mt-2 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition"
-                >
-                  Choose Plan
-                </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6 text-white shadow-2xl">
+            <div className="flex items-start justify-between">
+              <h3 className="text-xl font-semibold">🚀 Upgrade your plan</h3>
+              <button
+                className="text-white/60 hover:text-white"
+                onClick={() => setShowPricing(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <p className="mt-1 text-sm text-white/60">
+              More tokens, faster responses, premium support.
+            </p>
+
+            <div className="mt-5 grid gap-3">
+              <div className="rounded-xl border border-white/10 bg-white/5 p-4 hover:bg-white/10 transition">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-medium">Pro</div>
+                    <div className="text-xs text-white/60">10,000 tokens/day</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-semibold">₹149/mo</div>
+                    <button
+                      className="mt-2 rounded-xl bg-gradient-to-r from-fuchsia-500 to-indigo-500 px-3 py-1.5 text-xs"
+                      onClick={() => handleCheckout("pro")}
+                    >
+                      Choose
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div className="border border-indigo-300 rounded-lg p-4 hover:shadow-xl">
-                <h3 className="text-lg font-semibold text-indigo-600">Pro Max</h3>
-                <p className="text-sm text-gray-600">🌟 66,000 tokens/day (2M/month)</p>
-                <p className="text-indigo-700 font-bold mt-1">₹399/month</p>
-                <button
-                  onClick={() => handleCheckout("pro_max")}
-                  className="mt-2 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition"
-                >
-                  Choose Plan
-                </button>
+
+              <div className="rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/10 p-4 hover:bg-fuchsia-500/15 transition">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-medium">Pro Max</div>
+                    <div className="text-xs text-white/70">66,000 tokens/day (2M/month)</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-semibold">₹399/mo</div>
+                    <button
+                      className="mt-2 rounded-xl bg-gradient-to-r from-fuchsia-500 to-indigo-500 px-3 py-1.5 text-xs"
+                      onClick={() => handleCheckout("pro_max")}
+                    >
+                      Choose
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
+
+            <p className="mt-4 text-center text-xs text-white/50">
+              You can cancel anytime. Upgrades apply instantly.
+            </p>
           </div>
         </div>
       )}
-    </div>
+    </GlassCard>
   );
 };
 

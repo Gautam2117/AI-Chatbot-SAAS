@@ -2,7 +2,49 @@ import { auth, db } from "../firebase";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc, Timestamp, collection, addDoc } from "firebase/firestore";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
+import AuthLayout from "../components/AuthLayout";
+
+function Field({ label, children }) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-medium text-white/80">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function TextInput(props) {
+  return (
+    <input
+      {...props}
+      className={
+        "w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 " +
+        "text-white placeholder-white/40 outline-none " +
+        "focus:border-fuchsia-400/40 focus:ring-4 focus:ring-fuchsia-500/10 " +
+        (props.className || "")
+      }
+    />
+  );
+}
+
+function PrimaryButton({ loading, children, ...rest }) {
+  return (
+    <button
+      {...rest}
+      disabled={loading || rest.disabled}
+      className={
+        "group relative w-full overflow-hidden rounded-xl px-4 py-3 " +
+        "font-semibold text-white transition " +
+        "disabled:opacity-60 " +
+        "bg-gradient-to-r from-fuchsia-500 to-indigo-500 hover:from-fuchsia-400 hover:to-indigo-400"
+      }
+    >
+      <span className="relative z-10">{loading ? "Please wait…" : children}</span>
+      <span className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-20 bg-white transition" />
+    </button>
+  );
+}
 
 export default function Signup() {
   const [email, setEmail] = useState("");
@@ -36,9 +78,9 @@ export default function Signup() {
         createdAt: Timestamp.now(),
       });
 
-      // No email-link verification; OTP flow only
       navigate("/verify");
     } catch (e) {
+      // keep your error handling preference
       alert(e?.message || "Signup failed");
     } finally {
       setBusy(false);
@@ -46,40 +88,46 @@ export default function Signup() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 p-4">
-      <div className="bg-white shadow-2xl rounded-2xl p-10 max-w-md w-full space-y-6 transform transition-all duration-500 hover:scale-105">
-        <h2 className="text-3xl font-extrabold text-center text-purple-700 drop-shadow-lg">Create Your Account</h2>
-        <p className="text-center text-gray-500 mb-4">Sign up to get started</p>
-
-        <input
-          className="border-2 border-gray-200 px-4 py-3 w-full rounded-lg focus:ring-2 focus:ring-purple-400 focus:outline-none transition duration-300"
-          placeholder="📧 Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <input
-          className="border-2 border-gray-200 px-4 py-3 w-full rounded-lg focus:ring-2 focus:ring-purple-400 focus:outline-none transition duration-300"
-          type="password"
-          placeholder="🔒 Password"
-          value={pass}
-          onChange={(e) => setPass(e.target.value)}
-        />
-
-        <button
-          className="bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold px-4 py-3 rounded-lg w-full shadow-md hover:from-purple-700 hover:to-pink-700 transition duration-300 disabled:opacity-60"
-          disabled={busy}
-          onClick={signup}
-        >
-          {busy ? "Creating..." : "Sign Up"}
-        </button>
-
-        <p className="text-sm text-center mt-4 text-gray-600">
+    <AuthLayout
+      title="Create your account"
+      subtitle="Spin up your AI chatbot in minutes — secure and blazing fast."
+      footer={
+        <>
           Already have an account?{" "}
-          <a href="/login" className="text-purple-600 font-medium hover:underline">
-            Login
-          </a>
-        </p>
+          <Link to="/login" className="text-fuchsia-300 hover:text-fuchsia-200 underline underline-offset-4">
+            Sign in
+          </Link>
+        </>
+      }
+    >
+      <div className="space-y-5">
+        <Field label="Email">
+          <TextInput
+            placeholder="you@company.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+          />
+        </Field>
+
+        <Field label="Password">
+          <TextInput
+            type="password"
+            placeholder="••••••••"
+            value={pass}
+            onChange={(e) => setPass(e.target.value)}
+            autoComplete="new-password"
+          />
+        </Field>
+
+        <PrimaryButton onClick={signup} loading={busy}>
+          Create account
+        </PrimaryButton>
+
+        <div className="mt-2 text-center text-xs text-white/50">
+          By continuing you agree to our Terms & Privacy.
+        </div>
       </div>
-    </div>
+    </AuthLayout>
   );
 }
