@@ -4,7 +4,7 @@ import * as functions from "firebase-functions";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
 
-/* -------- initialise Firebase Admin -------- */
+/* -------- initialise Firebase Admin (fast, no I/O) -------- */
 admin.initializeApp();
 const db = admin.firestore();
 
@@ -13,46 +13,61 @@ const sha256 = (s) => crypto.createHash("sha256").update(s).digest("hex");
 const nowMs = () => Date.now();
 
 const DISPOSABLE = new Set([
-  "mailinator.com", "tempmail.com", "guerrillamail.com", "10minutemail.com",
-  "yopmail.com", "discard.email", "sharklasers.com", "getnada.com", "temp-mail.org",
-  "trashmail.com", "moakt.com", "tempail.com", "mail7.io",
+  "mailinator.com","tempmail.com","guerrillamail.com","10minutemail.com",
+  "yopmail.com","discard.email","sharklasers.com","getnada.com","temp-mail.org",
+  "trashmail.com","moakt.com","tempail.com","mail7.io",
 ]);
 
-/* -------- SMTP transport (optional in dev) -------- */
+/* -------- SMTP transport: LAZY init to avoid load-time stalls -------- */
 const mailFrom = functions.config().mail?.from || "Botify <noreply@botify.local>";
 
-let transporter = null;
-try {
-  const { host, port, user, pass } = functions.config().smtp || {};
-  if (host && port && user && pass) {
-    transporter = nodemailer.createTransport({
-      host,
-      port: Number(port),
-      secure: Number(port) === 465,
-      auth: { user, pass },
-    });
-    console.info("✅ SMTP transport initialised");
-  } else {
-    console.warn("⚠️  SMTP not configured — OTP will be logged to console.");
+/** Lazily create and cache a nodemailer transport on first use. */
+let _transport = null;
+function getTransport() {
+  if (_transport) return _transport;
+
+  try {
+    const cfg = functions.config().smtp || {};
+    const host = cfg.host;
+    const port = Number(cfg.port);
+    const user = cfg.user;
+    const pass = cfg.pass;
+
+    if (host && port && user && pass) {
+      _transport = nodemailer.createTransport({
+        host,
+        port,
+        secure: port === 465,
+        auth: { user, pass },
+      });
+      console.info("✅ SMTP transport ready");
+    } else {
+      console.warn("⚠️  SMTP not configured — OTP will be logged to console.");
+      _transport = null;
+    }
+  } catch (e) {
+    console.warn("⚠️  nodemailer setup failed — OTPs will be logged only.", e);
+    _transport = null;
   }
-} catch (e) {
-  console.warn("⚠️  nodemailer transport failed — OTP will be logged to console.", e);
+  return _transport;
 }
 
 async function sendEmail(to, subject, text) {
-  if (!transporter) {
+  const tx = getTransport();
+  if (!tx) {
+    // Safe fallback for dev or missing SMTP
     console.log(`[DEV EMAIL] to=${to}  subject=${subject}  text=${text}`);
     return;
   }
-  await transporter.sendMail({ from: mailFrom, to, subject, text });
+  await tx.sendMail({ from: mailFrom, to, subject, text });
 }
 
-/* -------- Common run options -------- */
-const runOptsFast = { region: "us-central1", timeoutSeconds: 5,  memory: "128MB" };
+/* -------- Common run options (v1 SDK) -------- */
+const runOptsFast = { region: "us-central1", timeoutSeconds: 5, memory: "128MB" };
 const runOptsCall = { region: "us-central1", timeoutSeconds: 20, memory: "256MB" };
 
 /* --------------------------------------------------- */
-/* -------- Blocking Triggers (Auth v2)  ------------- */
+/* -------- Blocking Triggers (Auth v2 in v1 SDK) ----- */
 
 /* 1️⃣  beforeCreate — validate + rate-limit sign-ups */
 export const beforeCreate = functions
@@ -63,12 +78,9 @@ export const beforeCreate = functions
     const domain = email.split("@")[1];
 
     if (!email || !domain) {
-      console.warn("❌ beforeCreate: missing email");
       throw new functions.auth.HttpsError("failed-precondition", "Email required.");
     }
-
     if (DISPOSABLE.has(domain)) {
-      console.warn("❌ beforeCreate: disposable domain", email);
       throw new functions.auth.HttpsError("failed-precondition", "Disposable email not allowed.");
     }
 
@@ -81,12 +93,9 @@ export const beforeCreate = functions
     let { count = 0, ts = now } = snap.exists ? snap.data() : {};
     if (now - ts > 86_400_000) count = 0; // reset after 24 h
     if (count >= 3) {
-      console.warn("❌ beforeCreate: IP limit reached", ip);
       throw new functions.auth.HttpsError("resource-exhausted", "Too many sign-ups from this IP.");
     }
     await ipDoc.set({ count: count + 1, ts: now }, { merge: true });
-
-    console.info("✅ beforeCreate ok for", email);
   });
 
 /* 2️⃣  beforeSignIn — block flagged accounts */
@@ -95,10 +104,8 @@ export const beforeSignIn = functions
   .auth.user()
   .beforeSignIn(async (user, context) => {
     if (context.authToken?.blocked) {
-      console.warn("❌ beforeSignIn: blocked UID", user.uid);
       throw new functions.auth.HttpsError("permission-denied", "Account blocked.");
     }
-    console.info("✅ beforeSignIn ok:", user.uid);
   });
 
 /* --------------------------------------------------- */
@@ -143,7 +150,6 @@ export const requestEmailOtp = functions
         `Your one-time verification code is ${code}. It expires in 10 minutes.`
       );
 
-      console.info("📧 OTP emailed to", user.email);
       return { ok: true };
     } catch (err) {
       console.error("requestEmailOtp error:", err);
@@ -173,46 +179,41 @@ export const verifyEmailOtp = functions
         throw new functions.https.HttpsError("failed-precondition", "User document missing.");
 
       const userDoc = userSnap.data() || {};
-      // Idempotency: already active? OK.
       if (userDoc.active === true) {
-        console.info("verifyEmailOtp: already active", uid);
-        return { ok: true };
+        return { ok: true }; // idempotent
       }
 
       const id = sha256(code);
       const otpRef  = db.doc(`users/${uid}/otps/${id}`);
       const otpSnap = await otpRef.get();
-      if (!otpSnap.exists)          return { ok:false, message:"Invalid or expired code." };
+      if (!otpSnap.exists)            return { ok:false, message:"Invalid or expired code." };
       const otp = otpSnap.data();
-      if (otp.used === true)        return { ok:false, message:"Invalid or expired code." };
+      if (otp.used === true)          return { ok:false, message:"Invalid or expired code." };
       if (otp.exp.toMillis() < nowMs())
         return { ok:false, message:"Invalid or expired code." };
 
+      // Transaction: reads were done before; only writes inside
       await db.runTransaction(async (tx) => {
-        // 1) mark OTP used
         tx.update(otpRef, { used: true });
-
-        // 2) activate user
         tx.update(userRef, {
           active: true,
           activatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
-
-        // 3) activate company if present
-        const latestUser = (await tx.get(userRef)).data() || userDoc;
-        if (latestUser.companyId) {
-          tx.update(db.doc(`companies/${latestUser.companyId}`), { status: "active" });
+        if (userDoc.companyId) {
+          tx.update(db.doc(`companies/${userDoc.companyId}`), { status: "active" });
         }
       });
 
-      // 4) set custom claims (role/tier preserved)
-      await admin.auth().setCustomUserClaims(uid, {
-        ...(userDoc.role ? { role: userDoc.role } : {}),
-        active: true,
-        tier: userDoc.tier || "free",
-      });
+      try {
+        await admin.auth().setCustomUserClaims(uid, {
+          ...(userDoc.role ? { role: userDoc.role } : {}),
+          active: true,
+          tier: userDoc.tier || "free",
+        });
+      } catch (e) {
+        console.warn("setCustomUserClaims failed (continuing):", e);
+      }
 
-      console.info("✅ verifyEmailOtp: account activated", uid);
       return { ok: true };
     } catch (err) {
       console.error("verifyEmailOtp error:", err);

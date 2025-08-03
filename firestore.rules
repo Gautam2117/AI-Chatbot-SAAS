@@ -9,8 +9,13 @@ service cloud.firestore {
 
     // USERS – allow self access even before activation (to complete verification)
     match /users/{uid} {
-      allow read: if isSignedIn() && (isOwner(uid) || isAdmin());
+      allow read:  if isSignedIn() && (isOwner(uid) || isAdmin());
       allow write: if isSignedIn() && (isOwner(uid) || isAdmin());
+      
+      // Explicitly lock down OTP subcollection from client
+      match /otps/{otpId} {
+        allow read, write: if false; // only Functions/Admin SDK should touch OTPs
+      }
     }
 
     // COMPANIES
@@ -33,14 +38,16 @@ service cloud.firestore {
 
     // FAQ root doc per company
     match /faqs/{companyId} {
-      allow read, write: if (isSignedIn() && isActive() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == companyId)
-        || isAdmin();
+      allow read, write: if (
+        isSignedIn() && isActive() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == companyId
+      ) || isAdmin();
     }
     match /faqs/{companyId}/list/{faqId} {
-      allow read, write: if (isSignedIn() && isActive() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == companyId)
-        || isAdmin();
+      allow read, write: if (
+        isSignedIn() && isActive() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == companyId
+      ) || isAdmin();
     }
 
     // GLOBAL SETTINGS (admin only)
@@ -53,6 +60,7 @@ service cloud.firestore {
       allow read, write: if isSignedIn() && isAdmin();
     }
 
+    // default deny
     match /{document=**} {
       allow read, write: if false;
     }
