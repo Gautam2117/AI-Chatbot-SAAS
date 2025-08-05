@@ -38,6 +38,10 @@
   };
   function t(k){ return (translations[currentLang] && translations[currentLang][k]) || translations.en[k] || k; }
 
+  function isNearBottom(el, px){ 
+    return el.scrollHeight - el.scrollTop - el.clientHeight < (px || 120);
+  }
+
   /* ------------------ Styles ------------------ */
   var style = document.createElement("style");
   style.textContent =
@@ -52,7 +56,7 @@
   (prefersReduced ? "" : ".botify__launcher::after{content:\"\";position:absolute;inset:-2px;border-radius:999px;box-shadow:0 0 0 0 rgba(124,58,237,.35);animation:botifyPulse 2.2s infinite;z-index:-1}") +
   "@keyframes botifyPulse{0%{box-shadow:0 0 0 0 rgba(124,58,237,.35)}70%{box-shadow:0 0 0 22px rgba(124,58,237,0)}100%{box-shadow:0 0 0 0 rgba(124,58,237,0)}}" +
   /* Panel */
-  ".botify__wrap{position:fixed;"+posStyle+"z-index:999998;display:none;width:420px;max-width:calc(100vw - 18px);max-height:min(76vh,720px);overflow:hidden;border-radius:var(--botify-radius);background:transparent;font-family:var(--botify-font);transform:translateY(14px);opacity:0}" +
+  ".botify__wrap{position:fixed;"+posStyle+"z-index:999998;display:none;width:420px;max-width:calc(100vw - 18px);height:min(76vh,720px);overflow:hidden;border-radius:var(--botify-radius);background:transparent;font-family:var(--botify-font);transform:translateY(14px);opacity:0}" +
   (prefersReduced ? "" : ".botify__wrap.botify--in{animation:botifyIn .28s ease forwards}") +
   "@keyframes botifyIn{to{transform:translateY(0);opacity:1}}" +
   "@media (max-width:480px){.botify__wrap{width:calc(100vw - 18px);height:calc(100vh - 18px);max-height:none;"+(isLeft?"left:9px":"right:9px")+";bottom:9px;border-radius:18px}}" +
@@ -71,7 +75,7 @@
   ".botify__btn{border:0;border-radius:10px;padding:6px 10px;background:rgba(255,255,255,.22);color:#fff;font-size:12px;cursor:pointer;transition:background .2s ease}" +
   ".botify__btn:hover{background:rgba(255,255,255,.34)}" +
   /* Messages */
-  ".botify__messages{position:relative;background:linear-gradient(180deg,#F8FAFC,#EEF2FF);padding:12px;display:flex;flex-direction:column;gap:10px;overflow:auto;flex:1;min-height:0;scroll-behavior:smooth}" +
+  ".botify__messages{position:relative;background:linear-gradient(180deg,#F8FAFC,#EEF2FF);padding:12px;display:flex;flex-direction:column;gap:10px;overflow:auto;flex:1;min-height:0;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y}" +
   ".botify__fade-top{pointer-events:none;position:sticky;top:0;height:12px;background:linear-gradient(#ffffff00,#ffffff00)}" +
   ".botify__fade-bot{pointer-events:none;position:sticky;bottom:0;height:24px;background:linear-gradient(to top,rgba(255,255,255,.85),rgba(255,255,255,0))}" +
   ".botify__row{display:flex;gap:8px;align-items:flex-end}" +
@@ -114,7 +118,6 @@
   document.head.appendChild(style);
 
   /* ------------------ DOM ------------------ */
-  // prevent duplicate mounts
   try { document.querySelectorAll(".botify__launcher, .botify__wrap").forEach(function(n){ n.remove(); }); } catch(e){}
 
   var launchBtn = document.createElement("button");
@@ -183,7 +186,6 @@
   var chipsEl = $("#botifyChips");
   var downBtn = $("#botifyDown");
 
-  // image fallback + perfect circle
   function applyImgFallback(img){
     try{
       img.addEventListener("error", function(){ img.src = "https://ai-chatbot-saas-eight.vercel.app/chatbot_widget_logo.png"; });
@@ -203,7 +205,7 @@
   function setUnread(n){ if(!badge) return; if(n>0){badge.style.display="inline-block";badge.textContent=String(n);} else badge.style.display="none"; }
   function bumpUnread(){ var n = Number(load("unread","0")) + 1; save("unread", String(n)); setUnread(n); }
   function autogrow() {
-    const MIN = 44;   // matches your CSS min-height
+    const MIN = 44;   // matches CSS
     const MAX = 132;
     field.style.height = "auto";
     const h = Math.max(field.scrollHeight || 0, MIN);
@@ -213,7 +215,7 @@
 
   var unread = Number(load("unread","0")); setUnread(unread);
 
-  // security: escape + linkify
+  // security helpers
   function escapeHTML(s){
     return String(s||"").replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]); });
   }
@@ -224,8 +226,7 @@
       return '<a href="'+url+'" target="_blank" rel="noopener noreferrer">'+url+'</a>';
     });
   }
-
-  function linkify(text){ // kept for me-bubbles; they are plain text anyway
+  function linkify(text){
     return String(text||"").replace(/(https?:\/\/[^\s]+)/g, function(u){ return '<a href="'+u+'" target="_blank" rel="noopener">'+u+'</a>'; });
   }
 
@@ -337,7 +338,7 @@
         autogrow();
         updateSendState();
         sendBtn.click();
-        field.focus();      // keep input visible/ready
+        field.focus(); // keep input ready
       });
       c.addEventListener("keydown", function(e){ if(e.key === "Enter" || e.key === " "){ e.preventDefault(); c.click(); }});
       chipsEl.appendChild(c);
@@ -359,7 +360,6 @@
     launchBtn.style.display = "inline-block";
     launchBtn.setAttribute("aria-expanded","false");
     save("minimized","1");
-    // abort any in-flight stream
     if (currentChatController) try{ currentChatController.abort(); }catch(e){}
   }
 
@@ -427,7 +427,7 @@
     save("theme", dark ? "dark" : "light");
   });
 
-  // speech (optional, locale-aware)
+  // speech
   var recog = null;
   var langMap = { en:"en-US", hi:"hi-IN", es:"es-ES", fr:"fr-FR" };
   if(hideMic){ micBtn.style.display = "none"; }
@@ -513,7 +513,6 @@
     autogrow();
     updateSendState();
 
-    // abort any prior in-flight request
     if (currentChatController) { try{ currentChatController.abort(); }catch(e){} }
     currentChatController = new AbortController();
 
@@ -555,11 +554,16 @@
               currentChatController = null;
               return;
             }
+
+            // only stick to bottom if user is already near bottom
+            var stick = isNearBottom(msgs, 120);
+
             var chunk = decoder.decode(result.value, {stream:true});
             acc += chunk;
-            // safe during stream: render as textContent to avoid partial tags
-            live.textContent = acc;
-            msgs.scrollTop = msgs.scrollHeight;
+            live.textContent = acc; // safe while streaming
+
+            if (stick) msgs.scrollTop = msgs.scrollHeight;
+
             updateDownBtn();
             return pump();
           });
@@ -623,10 +627,8 @@
     return {suggestions:[], payload:[]};
   }
 
-  // periodic availability refresh
   setInterval(function(){ checkAvailability(); }, 300000);
 
-  // start
   var wasMin = load("minimized","1") === "1";
   Promise.all([ checkAvailability(), fetchFaqsIfNeeded() ]).then(function(results){
     var faqRes = results[1] || {suggestions:[], payload:[]};
@@ -646,7 +648,6 @@
 
     if(openOnLoad || !wasMin){ openPanel(); }
 
-    // init send button state, hide mic if configured
     updateSendState();
     if (hideMic) micBtn.style.display = "none";
   });
