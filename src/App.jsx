@@ -321,11 +321,12 @@ export function MainContent() {
               </div>
 
               <Link
-                to="/pricing"
+                to="/pricing#pricing"
                 className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/90 hover:bg-white/10 transition"
               >
                 💎 Upgrade
               </Link>
+
               <button
                 onClick={() => signOut(auth)}
                 className="rounded-xl bg-gradient-to-r from-fuchsia-500 to-indigo-500 px-3 py-2 text-sm font-medium text-white shadow hover:from-fuchsia-400 hover:to-indigo-400 transition"
@@ -465,6 +466,8 @@ export function MainContent() {
 
                 <div className="rounded-xl border border-white/10 bg-white/5 p-4">
                   <label className="text-xs text-white/70">Accent color</label>
+
+                  {/* row 1: color input + hex */}
                   <div className="mt-2 flex items-center gap-3">
                     <input
                       type="color"
@@ -480,9 +483,22 @@ export function MainContent() {
                       className="w-[120px] rounded-lg bg-white/10 px-2 py-1.5 text-xs text-white/90 outline-none border border-white/10 focus:border-white/30"
                       placeholder="#6d28d9"
                     />
-                    <div className="flex items-center gap-2">
+                  </div>
+
+                  {/* row 2: swatches (wrap/scroll on small screens) */}
+                  <div className="mt-3 -mx-1 overflow-x-auto no-scrollbar">
+                    <div className="px-1 flex flex-wrap gap-2">
                       {swatches.map((c) => (
-                        <Swatch key={c} value={c} selected={accent === c} onClick={() => setAccent(c)} />
+                        <button
+                          key={c}
+                          title={c}
+                          onClick={() => setAccent(c)}
+                          style={{ background: c }}
+                          className={
+                            "h-6 w-6 rounded-full border " +
+                            (accent === c ? "ring-2 ring-white/70 border-white/60" : "border-white/30")
+                          }
+                        />
                       ))}
                     </div>
                   </div>
@@ -509,7 +525,7 @@ export function MainContent() {
                   <select
                     value={font}
                     onChange={(e) => setFont(e.target.value)}
-                    className="mt-2 w-full rounded-lg bg-white/10 px-3 py-2 text-sm text-white/90 outline-none border border-white/10 focus:border-white/30"
+                    className="mt-2 w-full rounded-lg bg-white text-gray-900 px-3 py-2 text-sm outline-none border border-white/10 focus:border-indigo-300"
                   >
                     <option value="Inter, ui-sans-serif, system-ui, -apple-system">Inter / System</option>
                     <option value="ui-sans-serif, system-ui, -apple-system">System UI</option>

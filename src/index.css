@@ -17,3 +17,7 @@ html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 
 /* Selection matches accent */
 ::selection { background: rgba(217, 70, 239, .35); color: #fff; }
+
+/* hide scrollbar for the palette row */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
