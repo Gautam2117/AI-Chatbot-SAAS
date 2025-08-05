@@ -202,7 +202,13 @@
   function setOnline(online){ statusDot.style.background = online ? "#22c55e" : "#ef4444"; statusText.textContent = online ? t("online") : t("offline"); }
   function setUnread(n){ if(!badge) return; if(n>0){badge.style.display="inline-block";badge.textContent=String(n);} else badge.style.display="none"; }
   function bumpUnread(){ var n = Number(load("unread","0")) + 1; save("unread", String(n)); setUnread(n); }
-  function autogrow(){ field.style.height="auto"; field.style.height = Math.min(field.scrollHeight, 132) + "px"; }
+  function autogrow() {
+    const MIN = 44;   // matches your CSS min-height
+    const MAX = 132;
+    field.style.height = "auto";
+    const h = Math.max(field.scrollHeight || 0, MIN);
+    field.style.height = Math.min(h, MAX) + "px";
+  }
   function updateSendState(){ sendBtn.disabled = !(field.value.trim()); }
 
   var unread = Number(load("unread","0")); setUnread(unread);
@@ -326,7 +332,13 @@
       c.className = "botify__chip";
       c.type = "button";
       c.textContent = label;
-      c.addEventListener("click", function(){ field.value = label; autogrow(); updateSendState(); sendBtn.click(); });
+      c.addEventListener("click", function(){
+        field.value = label;
+        autogrow();
+        updateSendState();
+        sendBtn.click();
+        field.focus();      // keep input visible/ready
+      });
       c.addEventListener("keydown", function(e){ if(e.key === "Enter" || e.key === " "){ e.preventDefault(); c.click(); }});
       chipsEl.appendChild(c);
     });
