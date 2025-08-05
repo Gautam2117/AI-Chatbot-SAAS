@@ -1,5 +1,5 @@
 // src/MainContent.jsx
-import React, { useState, useContext, useEffect } from "react";
+import React, { useState, useContext, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import FAQForm from "./components/FAQForm";
 import ChatTester from "./components/ChatTester";
@@ -12,14 +12,14 @@ import botifyLogo from "./assets/Botify_logo.png";
 /* ------------ constants ------------ */
 const BASE_URL = "https://ai-chatbot-backend-h669.onrender.com";
 
-/* ---------- small UI helpers (no extra deps) ---------- */
+/* ---------- tiny UI helpers ---------- */
 function Card({ className = "", children }) {
   return (
     <section
       className={
         "rounded-2xl border border-white/10 bg-white/5 backdrop-blur " +
-        "shadow-[0_10px_30px_rgba(0,0,0,0.15)] " +
-        "transition hover:shadow-[0_15px_40px_rgba(0,0,0,0.2)] " +
+        "shadow-[0_10px_30px_rgba(0,0,0,0.2)] " +
+        "transition hover:shadow-[0_16px_44px_rgba(0,0,0,0.28)] " +
         className
       }
     >
@@ -50,7 +50,7 @@ function CopyButton({ text, label = "Copy", onCopied, className = "" }) {
       await navigator.clipboard.writeText(text);
       setCopied(true);
       onCopied?.();
-      setTimeout(() => setCopied(false), 1200);
+      setTimeout(() => setCopied(false), 1100);
     } catch {}
   };
   return (
@@ -103,6 +103,22 @@ function Swatch({ value, selected, onClick }) {
   );
 }
 
+function TabButton({ active, children, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className={
+        "px-3 py-1.5 rounded-lg text-sm transition " +
+        (active
+          ? "bg-white/15 text-white border border-white/20"
+          : "text-white/70 hover:text-white hover:bg-white/5 border border-transparent")
+      }
+    >
+      {children}
+    </button>
+  );
+}
+
 /* ====================================================== */
 
 export function MainContent() {
@@ -112,17 +128,43 @@ export function MainContent() {
   // live status
   const [status, setStatus] = useState({ online: true, loading: true });
 
-  // builder options
-  const [brand, setBrand] = useState("Botify");
-  const [accent, setAccent] = useState("#6d28d9");
-  const [position, setPosition] = useState("bottom-right");
-  const [font, setFont] = useState("Inter, ui-sans-serif, system-ui, -apple-system");
-  const [radius, setRadius] = useState(22);
-  const [logo, setLogo] = useState("https://ai-chatbot-saas-eight.vercel.app/chatbot_widget_logo.png");
-  const [poweredBy, setPoweredBy] = useState(true);
-  const [draggable, setDraggable] = useState(true);
+  // builder tabs
+  const [activeTab, setActiveTab] = useState("appearance"); // appearance | behavior | embed
 
-  const swatches = ["#6d28d9", "#7c3aed", "#4f46e5", "#2563eb", "#0ea5e9", "#ec4899", "#22c55e", "#f59e0b"];
+  // builder options (persist to localStorage)
+  const saved = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem("botify:builder") || "{}");
+    } catch {
+      return {};
+    }
+  }, []);
+
+  const [brand, setBrand] = useState(saved.brand ?? "Botify");
+  const [accent, setAccent] = useState(saved.accent ?? "#6d28d9");
+  const [position, setPosition] = useState(saved.position ?? "bottom-right");
+  const [font, setFont] = useState(
+    saved.font ?? "Inter, ui-sans-serif, system-ui, -apple-system"
+  );
+  const [radius, setRadius] = useState(saved.radius ?? 22);
+  const [logo, setLogo] = useState(
+    saved.logo ?? "https://ai-chatbot-saas-eight.vercel.app/chatbot_widget_logo.png"
+  );
+  const [poweredBy, setPoweredBy] = useState(saved.poweredBy ?? true);
+  const [draggable, setDraggable] = useState(saved.draggable ?? true);
+
+  // Save builder whenever it changes
+  useEffect(() => {
+    localStorage.setItem(
+      "botify:builder",
+      JSON.stringify({ brand, accent, position, font, radius, logo, poweredBy, draggable })
+    );
+  }, [brand, accent, position, font, radius, logo, poweredBy, draggable]);
+
+  const swatches = [
+    "#6d28d9", "#7c3aed", "#4f46e5", "#2563eb",
+    "#0ea5e9", "#22c55e", "#f59e0b", "#ec4899"
+  ];
 
   // Ensure usage doc exists only after user is verified + active
   useEffect(() => {
@@ -188,7 +230,6 @@ export function MainContent() {
   // Helpers to test on page (inject/remove)
   const TEST_SCRIPT_ID = "botify-widget-test-script";
   function removeWidgetDom() {
-    // remove known DOM nodes created by widget
     document.querySelectorAll(".botify__launcher, .botify__wrap").forEach((n) => n.remove());
   }
   function removeTestScript() {
@@ -196,10 +237,8 @@ export function MainContent() {
     if (tag) tag.remove();
   }
   function testOnPage() {
-    // clean up first to avoid duplicates / flicker
     removeWidgetDom();
     removeTestScript();
-
     const tag = document.createElement("script");
     tag.src = "https://ai-chatbot-saas-eight.vercel.app/chatbot.js";
     tag.id = TEST_SCRIPT_ID;
@@ -218,6 +257,16 @@ export function MainContent() {
     removeWidgetDom();
     removeTestScript();
   }
+  function resetDefaults() {
+    setBrand("Botify");
+    setAccent("#6d28d9");
+    setPosition("bottom-right");
+    setFont("Inter, ui-sans-serif, system-ui, -apple-system");
+    setRadius(22);
+    setLogo("https://ai-chatbot-saas-eight.vercel.app/chatbot_widget_logo.png");
+    setPoweredBy(true);
+    setDraggable(true);
+  }
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-indigo-950 via-fuchsia-900 to-black">
@@ -228,7 +277,7 @@ export function MainContent() {
         <div className="absolute bottom-0 left-1/3 h-64 w-64 rounded-full bg-blue-400/10 blur-3xl" />
       </div>
 
-      <div className="relative mx-auto max-w-6xl px-6 py-10 md:py-14">
+      <div className="relative mx-auto max-w-7xl px-6 py-10 md:py-14">
         {/* Header */}
         <header
           className={
@@ -251,7 +300,7 @@ export function MainContent() {
                   Botify Dashboard
                 </h1>
                 <p className="text-sm text-white/55 -mt-0.5">
-                  Manage knowledge, test chat, and embed Botify anywhere.
+                  Customize, embed, and test your AI assistant.
                 </p>
               </div>
             </div>
@@ -287,117 +336,159 @@ export function MainContent() {
           </div>
         </header>
 
-        {/* Grid */}
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-          {/* Left column (Cards) */}
-          <div className="space-y-6 xl:col-span-1">
-            {/* User Card */}
-            <Card className="p-5 md:p-6">
-              <SectionTitle
-                icon={<span>👤</span>}
-                title="Your workspace"
-                subtitle="Identity, status and quick actions"
-              />
-              <div className="mt-4 grid gap-3">
-                <div className="flex items-center justify-between rounded-xl bg-white/5 p-3 border border-white/10">
-                  <div className="text-xs text-white/60">
-                    <div className="text-white/80">User ID</div>
-                    <code className="text-[11px] text-white/70">{user.uid}</code>
-                  </div>
-                  <CopyButton text={user.uid} label="Copy ID" />
+        {/* Grid: 12 cols for breathing room */}
+        <div className="grid grid-cols-12 gap-6">
+          {/* Profile (left) */}
+          <Card className="p-5 md:p-6 col-span-12 lg:col-span-4">
+            <SectionTitle
+              icon={<span>👤</span>}
+              title="Your workspace"
+              subtitle="Identity, status and quick actions"
+            />
+            <div className="mt-4 grid gap-3">
+              <div className="flex items-center justify-between rounded-xl bg-white/5 p-3 border border-white/10">
+                <div className="text-xs text-white/60">
+                  <div className="text-white/80">User ID</div>
+                  <code className="text-[11px] text-white/70">{user.uid}</code>
                 </div>
+                <CopyButton text={user.uid} label="Copy ID" />
+              </div>
 
-                <div className="flex items-center justify-between rounded-xl bg-white/5 p-3 border border-white/10">
-                  <div className="text-xs text-white/60">
-                    <div className="text-white/80">Email</div>
-                    <div className="text-[12px]">{user.email}</div>
-                  </div>
-                  <div
-                    className={
-                      "rounded-full px-2 py-0.5 text-[10px] " +
-                      (user.emailVerified
-                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30"
-                        : "bg-amber-500/20 text-amber-300 border border-amber-400/30")
-                    }
-                  >
-                    {user.emailVerified ? "Verified" : "Pending"}
-                  </div>
+              <div className="flex items-center justify-between rounded-xl bg-white/5 p-3 border border-white/10">
+                <div className="text-xs text-white/60">
+                  <div className="text-white/80">Email</div>
+                  <div className="text-[12px]">{user.email}</div>
                 </div>
-
-                <div className="flex items-center justify-between rounded-xl bg-white/5 p-3 border border-white/10">
-                  <div className="text-xs text-white/60">
-                    <div className="text-white/80">Status</div>
-                    <div className="text-[12px]">
-                      {user.active ? "Active" : "Awaiting activation"}
-                    </div>
-                  </div>
-                  <div
-                    className={
-                      "rounded-full px-2 py-0.5 text-[10px] " +
-                      (user.active
-                        ? "bg-sky-500/20 text-sky-300 border border-sky-400/30"
-                        : "bg-rose-500/20 text-rose-300 border border-rose-400/30")
-                    }
-                  >
-                    {user.active ? "Enabled" : "Locked"}
-                  </div>
+                <div
+                  className={
+                    "rounded-full px-2 py-0.5 text-[10px] " +
+                    (user.emailVerified
+                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30"
+                      : "bg-amber-500/20 text-amber-300 border border-amber-400/30")
+                  }
+                >
+                  {user.emailVerified ? "Verified" : "Pending"}
                 </div>
               </div>
-            </Card>
 
-            {/* Script Builder + Embed */}
-            <Card className="p-5 md:p-6">
-              <SectionTitle
-                icon={<span>🔌</span>}
-                title="Embed the chatbot"
-                subtitle="Paste right before </body> — or use the test button to preview instantly"
-                right={
-                  <div className="hidden md:flex items-center gap-3">
-                    <Toggle checked={poweredBy} onChange={setPoweredBy} label="Powered by" />
-                    <Toggle checked={draggable} onChange={setDraggable} label="Draggable" />
+              <div className="flex items-center justify-between rounded-xl bg-white/5 p-3 border border-white/10">
+                <div className="text-xs text-white/60">
+                  <div className="text-white/80">Status</div>
+                  <div className="text-[12px]">
+                    {user.active ? "Active" : "Awaiting activation"}
                   </div>
-                }
-              />
+                </div>
+                <div
+                  className={
+                    "rounded-full px-2 py-0.5 text-[10px] " +
+                    (user.active
+                      ? "bg-sky-500/20 text-sky-300 border border-sky-400/30"
+                      : "bg-rose-500/20 text-rose-300 border border-rose-400/30")
+                  }
+                >
+                  {user.active ? "Enabled" : "Locked"}
+                </div>
+              </div>
 
-              {/* Builder controls */}
-              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <label className="text-xs text-white/70">Brand</label>
+              {isAdmin && (
+                <div className="mt-1 flex items-center justify-between rounded-xl bg-white/5 p-3 border border-white/10">
+                  <div className="text-sm text-white/80">Admin portal</div>
+                  <Link
+                    to="/admin"
+                    className="rounded-xl bg-gradient-to-r from-fuchsia-500 to-indigo-500 px-3 py-1.5 text-xs text-white hover:from-fuchsia-400 hover:to-indigo-400 transition"
+                  >
+                    Open →
+                  </Link>
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* Chatbot Customizer (wide) */}
+          <Card className="p-5 md:p-6 col-span-12 lg:col-span-8">
+            <SectionTitle
+              icon={<span>🧩</span>}
+              title="Chatbot Customizer"
+              subtitle="Tweak appearance & behavior, then embed with one script"
+              right={
+                <div className="hidden md:flex items-center gap-2">
+                  <TabButton active={activeTab === "appearance"} onClick={() => setActiveTab("appearance")}>
+                    Appearance
+                  </TabButton>
+                  <TabButton active={activeTab === "behavior"} onClick={() => setActiveTab("behavior")}>
+                    Behavior
+                  </TabButton>
+                  <TabButton active={activeTab === "embed"} onClick={() => setActiveTab("embed")}>
+                    Embed Code
+                  </TabButton>
+                </div>
+              }
+            />
+
+            {/* mobile tabs */}
+            <div className="md:hidden mt-3 flex gap-2">
+              <TabButton active={activeTab === "appearance"} onClick={() => setActiveTab("appearance")}>
+                Appearance
+              </TabButton>
+              <TabButton active={activeTab === "behavior"} onClick={() => setActiveTab("behavior")}>
+                Behavior
+              </TabButton>
+              <TabButton active={activeTab === "embed"} onClick={() => setActiveTab("embed")}>
+                Embed
+              </TabButton>
+            </div>
+
+            {/* APPEARANCE TAB */}
+            {activeTab === "appearance" && (
+              <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <label className="text-xs text-white/70">Brand name</label>
                   <input
                     value={brand}
                     onChange={(e) => setBrand(e.target.value)}
-                    className="mt-1 w-full rounded-lg bg-white/10 px-3 py-2 text-sm text-white/90 outline-none border border-white/10 focus:border-white/30"
+                    className="mt-2 w-full rounded-lg bg-white/10 px-3 py-2 text-sm text-white/90 outline-none border border-white/10 focus:border-white/30"
                     placeholder="Botify"
                   />
+                  <p className="mt-1.5 text-[11px] text-white/50">Shown in the chat header.</p>
                 </div>
 
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
                   <label className="text-xs text-white/70">Logo URL</label>
                   <input
                     value={logo}
                     onChange={(e) => setLogo(e.target.value)}
-                    className="mt-1 w-full rounded-lg bg-white/10 px-3 py-2 text-sm text-white/90 outline-none border border-white/10 focus:border-white/30"
+                    className="mt-2 w-full rounded-lg bg-white/10 px-3 py-2 text-sm text-white/90 outline-none border border-white/10 focus:border-white/30"
                     placeholder="https://…/logo.png"
                   />
+                  <p className="mt-1.5 text-[11px] text-white/50">Square works best (≥ 256×256).</p>
                 </div>
 
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <label className="text-xs text-white/70">Accent</label>
-                  <div className="mt-2 flex items-center gap-2">
-                    {swatches.map((c) => (
-                      <Swatch key={c} value={c} selected={accent === c} onClick={() => setAccent(c)} />
-                    ))}
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <label className="text-xs text-white/70">Accent color</label>
+                  <div className="mt-2 flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={accent}
+                      onChange={(e) => setAccent(e.target.value)}
+                      className="h-9 w-9 rounded-md bg-transparent border border-white/20 p-0"
+                      aria-label="Accent color"
+                    />
                     <input
                       type="text"
                       value={accent}
                       onChange={(e) => setAccent(e.target.value)}
-                      className="ml-2 w-[110px] rounded-lg bg-white/10 px-2 py-1.5 text-xs text-white/90 outline-none border border-white/10 focus:border-white/30"
+                      className="w-[120px] rounded-lg bg-white/10 px-2 py-1.5 text-xs text-white/90 outline-none border border-white/10 focus:border-white/30"
                       placeholder="#6d28d9"
                     />
+                    <div className="flex items-center gap-2">
+                      {swatches.map((c) => (
+                        <Swatch key={c} value={c} selected={accent === c} onClick={() => setAccent(c)} />
+                      ))}
+                    </div>
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
                   <label className="text-xs text-white/70">Corner radius</label>
                   <div className="mt-2 flex items-center gap-3">
                     <input
@@ -410,9 +501,25 @@ export function MainContent() {
                     />
                     <span className="text-xs text-white/80 w-10 text-right">{radius}px</span>
                   </div>
+                  <p className="mt-1.5 text-[11px] text-white/50">Affects launcher & chat window.</p>
                 </div>
 
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <label className="text-xs text-white/70">Font stack</label>
+                  <select
+                    value={font}
+                    onChange={(e) => setFont(e.target.value)}
+                    className="mt-2 w-full rounded-lg bg-white/10 px-3 py-2 text-sm text-white/90 outline-none border border-white/10 focus:border-white/30"
+                  >
+                    <option value="Inter, ui-sans-serif, system-ui, -apple-system">Inter / System</option>
+                    <option value="ui-sans-serif, system-ui, -apple-system">System UI</option>
+                    <option value="Poppins, ui-sans-serif, system-ui, -apple-system">Poppins</option>
+                    <option value="Roboto, ui-sans-serif, system-ui, -apple-system">Roboto</option>
+                  </select>
+                  <p className="mt-1.5 text-[11px] text-white/50">Overrides widget typography.</p>
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
                   <label className="text-xs text-white/70">Position</label>
                   <div className="mt-2 flex items-center gap-3 text-sm">
                     {["bottom-right", "bottom-left"].map((p) => (
@@ -432,26 +539,65 @@ export function MainContent() {
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <label className="text-xs text-white/70">Font stack</label>
-                  <select
-                    value={font}
-                    onChange={(e) => setFont(e.target.value)}
-                    className="mt-2 w-full rounded-lg bg-white/10 px-3 py-2 text-sm text-white/90 outline-none border border-white/10 focus:border-white/30"
+                <div className="md:col-span-2 flex items-center justify-between mt-1">
+                  <div className="flex items-center gap-4">
+                    <Toggle checked={poweredBy} onChange={setPoweredBy} label="Show “Powered by”" />
+                    <Toggle checked={draggable} onChange={setDraggable} label="Draggable window" />
+                  </div>
+                  <button
+                    onClick={resetDefaults}
+                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/80 hover:bg-white/10"
                   >
-                    <option value="Inter, ui-sans-serif, system-ui, -apple-system">Inter / System</option>
-                    <option value="ui-sans-serif, system-ui, -apple-system">System UI</option>
-                    <option value="Poppins, ui-sans-serif, system-ui, -apple-system">Poppins</option>
-                    <option value="Roboto, ui-sans-serif, system-ui, -apple-system">Roboto</option>
-                  </select>
+                    Reset to defaults
+                  </button>
                 </div>
               </div>
+            )}
 
-              {/* Script + Actions */}
-              <div className="mt-4">
-                <pre className="rounded-xl bg-black/50 border border-white/10 p-3 text-[11px] leading-relaxed text-white/80 overflow-x-auto">
+            {/* BEHAVIOR TAB (space for future toggles) */}
+            {activeTab === "behavior" && (
+              <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-sm text-white/80 font-medium">Language</p>
+                  <p className="mt-1.5 text-[12px] text-white/60">
+                    Widget supports multiple languages; bot auto-detects user language.
+                  </p>
+                  <div className="mt-3 text-[12px] text-white/50">
+                    Configure default language in your bot logic or leave auto.
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-sm text-white/80 font-medium">Suggestion chips</p>
+                  <p className="mt-1.5 text-[12px] text-white/60">
+                    Pre-filled quick prompts like “Pricing”, “Help”, etc. (configured in code for now).
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4 md:col-span-2">
+                  <p className="text-sm text-white/80 font-medium">Availability</p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-xs text-white/70">
+                      {status.loading ? "Checking…" : status.online ? "Live" : "Temporarily Unavailable"}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-[12px] text-white/60">
+                    Status is fetched from your usage endpoint every few minutes by the widget.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* EMBED TAB */}
+            {activeTab === "embed" && (
+              <div className="mt-5">
+                <div className="rounded-xl border border-white/10 bg-black/50 p-3">
+                  <pre className="text-[11px] leading-relaxed text-white/80 overflow-x-auto">
 {scriptTag}
-                </pre>
+                  </pre>
+                </div>
+
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <CopyButton text={scriptTag} label="Copy script" />
                   <button
@@ -473,67 +619,46 @@ export function MainContent() {
                     Read embed guide →
                   </a>
                 </div>
-              </div>
 
-              <div className="mt-3 text-xs text-white/50 space-y-1">
-                <p>• <code>data-color</code> changes the button/theme accent</p>
-                <p>• <code>data-position</code> supports <code>bottom-right</code> or <code>bottom-left</code></p>
-                <p>• <code>data-border-radius</code> accepts any valid CSS radius value</p>
-                <p>• <code>data-poweredby</code> and <code>data-draggable</code> toggle branding & drag</p>
-              </div>
-            </Card>
-
-            {/* Admin Card */}
-            {isAdmin && (
-              <Card className="p-5 md:p-6">
-                <SectionTitle
-                  icon={<span>🛡️</span>}
-                  title="Admin portal"
-                  subtitle="Manage accounts, quotas and global settings"
-                />
-                <div className="mt-4 flex items-center justify-between rounded-xl bg-white/5 p-3 border border-white/10">
-                  <div className="text-sm text-white/80">You have elevated privileges.</div>
-                  <Link
-                    to="/admin"
-                    className="rounded-xl bg-gradient-to-r from-fuchsia-500 to-indigo-500 px-3 py-1.5 text-xs text-white hover:from-fuchsia-400 hover:to-indigo-400 transition"
-                  >
-                    Open Admin →
-                  </Link>
+                <div className="mt-3 text-xs text-white/50 space-y-1">
+                  <p>• Paste right before <code>&lt;/body&gt;</code></p>
+                  <p>• <code>data-color</code> sets your accent, <code>data-position</code> = bottom-right/left</p>
+                  <p>• <code>data-border-radius</code> accepts any valid CSS radius</p>
+                  <p>• <code>data-poweredby</code> &amp; <code>data-draggable</code> toggle branding & drag</p>
                 </div>
-              </Card>
+              </div>
             )}
-          </div>
+          </Card>
 
-            {/* Right column (FAQ & Chat) */}
-          <div className="space-y-6 xl:col-span-2">
-            <Card className="p-5 md:p-6">
-              <SectionTitle
-                icon={<span>📚</span>}
-                title="FAQ Knowledge"
-                subtitle="Teach your assistant with precise Q&A"
-              />
-              <div className="mt-5">
-                <FAQForm faqs={faqs} setFaqs={setFaqs} />
-              </div>
-            </Card>
+          {/* FAQ (wide) */}
+          <Card className="p-5 md:p-6 col-span-12 lg:col-span-7">
+            <SectionTitle
+              icon={<span>📚</span>}
+              title="FAQ Knowledge"
+              subtitle="Teach your assistant with precise Q&A"
+            />
+            <div className="mt-5">
+              <FAQForm faqs={faqs} setFaqs={setFaqs} />
+            </div>
+          </Card>
 
-            <Card className="p-5 md:p-6">
-              <SectionTitle
-                icon={<span>💬</span>}
-                title="Chat tester"
-                subtitle="Preview your Botify assistant with your latest knowledge"
-                right={
-                  <span className="hidden md:inline-flex items-center gap-2 text-xs text-white/60">
-                    <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                    Realtime
-                  </span>
-                }
-              />
-              <div className="mt-5">
-                <ChatTester faqs={faqs} />
-              </div>
-            </Card>
-          </div>
+          {/* Chat tester (right) */}
+          <Card className="p-5 md:p-6 col-span-12 lg:col-span-5">
+            <SectionTitle
+              icon={<span>💬</span>}
+              title="Chat tester"
+              subtitle="Preview your Botify assistant with your latest knowledge"
+              right={
+                <span className="hidden md:inline-flex items-center gap-2 text-xs text-white/60">
+                  <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                  Realtime
+                </span>
+              }
+            />
+            <div className="mt-5">
+              <ChatTester faqs={faqs} />
+            </div>
+          </Card>
         </div>
 
         {/* Footer */}
