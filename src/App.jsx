@@ -89,20 +89,6 @@ function Toggle({ checked, onChange, label }) {
   );
 }
 
-function Swatch({ value, selected, onClick }) {
-  return (
-    <button
-      title={value}
-      onClick={onClick}
-      style={{ background: value }}
-      className={
-        "h-7 w-7 rounded-full border " +
-        (selected ? "ring-2 ring-white/70 border-white/60" : "border-white/30")
-      }
-    />
-  );
-}
-
 function TabButton({ active, children, onClick }) {
   return (
     <button
@@ -140,6 +126,7 @@ export function MainContent() {
     }
   }, []);
 
+  // Appearance
   const [brand, setBrand] = useState(saved.brand ?? "Botify");
   const [accent, setAccent] = useState(saved.accent ?? "#6d28d9");
   const [position, setPosition] = useState(saved.position ?? "bottom-right");
@@ -153,13 +140,29 @@ export function MainContent() {
   const [poweredBy, setPoweredBy] = useState(saved.poweredBy ?? true);
   const [draggable, setDraggable] = useState(saved.draggable ?? true);
 
+  // Behavior
+  const [openOnLoad, setOpenOnLoad] = useState(saved.openOnLoad ?? false);
+  const [hideMic, setHideMic] = useState(saved.hideMic ?? false);
+  const [suggestionsMode, setSuggestionsMode] = useState(saved.suggestionsMode ?? "auto"); // auto | off | custom
+  const [suggestionsList, setSuggestionsList] = useState(saved.suggestionsList ?? "Pricing|Features|Installation|Contact sales");
+  const [customWelcome, setCustomWelcome] = useState(saved.customWelcome ?? "");
+  // FAQs URL supports USER_ID token
+  const defaultFaqsUrl = `${BASE_URL}/api/faqs?userId=USER_ID`;
+  const [faqsUrl, setFaqsUrl] = useState(saved.faqsUrl ?? defaultFaqsUrl);
+
   // Save builder whenever it changes
   useEffect(() => {
     localStorage.setItem(
       "botify:builder",
-      JSON.stringify({ brand, accent, position, font, radius, logo, poweredBy, draggable })
+      JSON.stringify({
+        brand, accent, position, font, radius, logo, poweredBy, draggable,
+        openOnLoad, hideMic, suggestionsMode, suggestionsList, customWelcome, faqsUrl
+      })
     );
-  }, [brand, accent, position, font, radius, logo, poweredBy, draggable]);
+  }, [
+    brand, accent, position, font, radius, logo, poweredBy, draggable,
+    openOnLoad, hideMic, suggestionsMode, suggestionsList, customWelcome, faqsUrl
+  ]);
 
   const swatches = [
     "#6d28d9", "#7c3aed", "#4f46e5", "#2563eb",
@@ -213,9 +216,10 @@ export function MainContent() {
   if (!user) return null;
   const isAdmin = (user?.claims?.role || role) === "admin";
 
-  // Builder -> script tag
+  // Builder -> script tag (includes new attributes)
   const scriptTag =
 `<script src="https://ai-chatbot-saas-eight.vercel.app/chatbot.js"
+  data-api="${BASE_URL}"
   data-user-id="${user.uid}"
   data-brand="${brand}"
   data-color="${accent}"
@@ -225,6 +229,12 @@ export function MainContent() {
   data-logo="${logo}"
   data-poweredby="${poweredBy}"
   data-draggable="${draggable}"
+  data-open-on-load="${openOnLoad}"
+  data-hide-mic="${hideMic}"
+  data-suggestions="${suggestionsMode}"
+  data-suggestions-list="${suggestionsList}"
+  data-faqs-url="${faqsUrl}"
+  data-welcome="${customWelcome.replace(/"/g, "&quot;")}"
 ></script>`;
 
   // Helpers to test on page (inject/remove)
@@ -242,6 +252,7 @@ export function MainContent() {
     const tag = document.createElement("script");
     tag.src = "https://ai-chatbot-saas-eight.vercel.app/chatbot.js";
     tag.id = TEST_SCRIPT_ID;
+    tag.setAttribute("data-api", BASE_URL);
     tag.setAttribute("data-user-id", user.uid);
     tag.setAttribute("data-brand", brand);
     tag.setAttribute("data-color", accent);
@@ -251,6 +262,12 @@ export function MainContent() {
     tag.setAttribute("data-logo", logo);
     tag.setAttribute("data-poweredby", String(poweredBy));
     tag.setAttribute("data-draggable", String(draggable));
+    tag.setAttribute("data-open-on-load", String(openOnLoad));
+    tag.setAttribute("data-hide-mic", String(hideMic));
+    tag.setAttribute("data-suggestions", suggestionsMode);
+    tag.setAttribute("data-suggestions-list", suggestionsList);
+    tag.setAttribute("data-faqs-url", faqsUrl);
+    if (customWelcome) tag.setAttribute("data-welcome", customWelcome);
     document.body.appendChild(tag);
   }
   function cleanupTest() {
@@ -266,6 +283,12 @@ export function MainContent() {
     setLogo("https://ai-chatbot-saas-eight.vercel.app/chatbot_widget_logo.png");
     setPoweredBy(true);
     setDraggable(true);
+    setOpenOnLoad(false);
+    setHideMic(false);
+    setSuggestionsMode("auto");
+    setSuggestionsList("Pricing|Features|Installation|Contact sales");
+    setCustomWelcome("");
+    setFaqsUrl(defaultFaqsUrl);
   }
 
   return (
@@ -485,10 +508,13 @@ export function MainContent() {
                     />
                   </div>
 
-                  {/* row 2: swatches (wrap/scroll on small screens) */}
+                  {/* row 2: swatches */}
                   <div className="mt-3 -mx-1 overflow-x-auto no-scrollbar">
                     <div className="px-1 flex flex-wrap gap-2">
-                      {swatches.map((c) => (
+                      {[
+                        "#6d28d9", "#7c3aed", "#4f46e5", "#2563eb",
+                        "#0ea5e9", "#22c55e", "#f59e0b", "#ec4899"
+                      ].map((c) => (
                         <button
                           key={c}
                           title={c}
@@ -570,23 +596,97 @@ export function MainContent() {
               </div>
             )}
 
-            {/* BEHAVIOR TAB (space for future toggles) */}
+            {/* BEHAVIOR TAB (fully configurable) */}
             {activeTab === "behavior" && (
               <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                  <p className="text-sm text-white/80 font-medium">Language</p>
+                  <p className="text-sm text-white/80 font-medium">Open on load</p>
                   <p className="mt-1.5 text-[12px] text-white/60">
-                    Widget supports multiple languages; bot auto-detects user language.
+                    Automatically opens the chat when the page loads (good for promos or onboarding).
                   </p>
-                  <div className="mt-3 text-[12px] text-white/50">
-                    Configure default language in your bot logic or leave auto.
+                  <div className="mt-3">
+                    <Toggle checked={openOnLoad} onChange={setOpenOnLoad} label="Open when page loads" />
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-sm text-white/80 font-medium">Microphone</p>
+                  <p className="mt-1.5 text-[12px] text-white/60">
+                    Show or hide the voice input button in the widget UI.
+                  </p>
+                  <div className="mt-3">
+                    <Toggle checked={hideMic} onChange={setHideMic} label="Hide microphone" />
                   </div>
                 </div>
 
                 <div className="rounded-xl border border-white/10 bg-white/5 p-4">
                   <p className="text-sm text-white/80 font-medium">Suggestion chips</p>
                   <p className="mt-1.5 text-[12px] text-white/60">
-                    Pre-filled quick prompts like “Pricing”, “Help”, etc. (configured in code for now).
+                    Choose how chips appear under the chat (auto=from FAQs, off=none, custom=your list).
+                  </p>
+                  <div className="mt-3">
+                    <select
+                      value={suggestionsMode}
+                      onChange={(e) => setSuggestionsMode(e.target.value)}
+                      className="w-full rounded-lg bg-white text-gray-900 px-3 py-2 text-sm outline-none border border-white/10 focus:border-indigo-300"
+                    >
+                      <option value="auto">Auto (from FAQs)</option>
+                      <option value="off">Off</option>
+                      <option value="custom">Custom</option>
+                    </select>
+                  </div>
+                  {suggestionsMode === "custom" && (
+                    <div className="mt-3">
+                      <label className="text-xs text-white/70">Custom suggestions (pipe “|” separated)</label>
+                      <input
+                        value={suggestionsList}
+                        onChange={(e) => setSuggestionsList(e.target.value)}
+                        className="mt-1.5 w-full rounded-lg bg-white/10 px-3 py-2 text-sm text-white/90 outline-none border border-white/10 focus:border-white/30"
+                        placeholder="Pricing|Features|Installation|Contact sales"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-sm text-white/80 font-medium">Welcome message (optional)</p>
+                  <p className="mt-1.5 text-[12px] text-white/60">
+                    Overrides the default greeting in the chat for all languages.
+                  </p>
+                  <input
+                    value={customWelcome}
+                    onChange={(e) => setCustomWelcome(e.target.value)}
+                    className="mt-2 w-full rounded-lg bg-white/10 px-3 py-2 text-sm text-white/90 outline-none border border-white/10 focus:border-white/30"
+                    placeholder="Hello! How can I help you today?"
+                  />
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4 md:col-span-2">
+                  <p className="text-sm text-white/80 font-medium">FAQs endpoint</p>
+                  <p className="mt-1.5 text-[12px] text-white/60">
+                    The widget fetches questions for chips and sends full FAQs to the API. Use{" "}
+                    <code className="text-white/70">USER_ID</code> as a token (it will be replaced with the real ID).
+                  </p>
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      value={faqsUrl}
+                      onChange={(e) => setFaqsUrl(e.target.value)}
+                      className="flex-1 rounded-lg bg-white/10 px-3 py-2 text-sm text-white/90 outline-none border border-white/10 focus:border-white/30"
+                      placeholder={defaultFaqsUrl}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setFaqsUrl(defaultFaqsUrl)}
+                      className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/90 hover:bg-white/10 transition"
+                    >
+                      Use default
+                    </button>
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-white/50">
+                    Example (resolved):{" "}
+                    <span className="text-white/80">
+                      {faqsUrl.replace(/USER_ID/g, user.uid)}
+                    </span>
                   </p>
                 </div>
 
@@ -638,9 +738,12 @@ export function MainContent() {
 
                 <div className="mt-3 text-xs text-white/50 space-y-1">
                   <p>• Paste right before <code>&lt;/body&gt;</code></p>
-                  <p>• <code>data-color</code> sets your accent, <code>data-position</code> = bottom-right/left</p>
-                  <p>• <code>data-border-radius</code> accepts any valid CSS radius</p>
-                  <p>• <code>data-poweredby</code> &amp; <code>data-draggable</code> toggle branding & drag</p>
+                  <p>• <code>data-api</code> points the widget at your backend.</p>
+                  <p>• <code>data-faqs-url</code> supports a <code>USER_ID</code> token that is replaced at runtime.</p>
+                  <p>• <code>data-suggestions</code> = <code>auto</code> | <code>off</code> | <code>custom</code></p>
+                  <p>• <code>data-welcome</code>, <code>data-open-on-load</code>, <code>data-hide-mic</code> customize UX.</p>
+                  <p>• <code>data-border-radius</code> accepts any valid CSS radius.</p>
+                  <p>• <code>data-poweredby</code> &amp; <code>data-draggable</code> toggle branding & drag.</p>
                 </div>
               </div>
             )}

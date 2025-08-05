@@ -2,19 +2,14 @@ import React, { useContext, useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import { AuthContext } from "../context/AuthProvider";
 import { db } from "../firebase";
-import {
-  doc,
-  getDoc,
-  collection,
-  onSnapshot,
-} from "firebase/firestore";
+import { doc, getDoc, collection, onSnapshot } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { TypeAnimation } from "react-type-animation";
 import rehypeSanitize from "rehype-sanitize";
 
-/* ------------------- tiny UI atoms (no new deps) ------------------- */
+/* ------------------- tiny UI atoms ------------------- */
 const GlassCard = ({ children, className = "" }) => (
   <div
     className={
@@ -41,7 +36,7 @@ const IconButton = ({ onClick, children, title, disabled }) => (
   </button>
 );
 
-/* ------------------------------------------------------------------ */
+/* ----------------------------------------------------- */
 
 const ChatTester = () => {
   const { user } = useContext(AuthContext);
@@ -63,9 +58,7 @@ const ChatTester = () => {
 
   const BASE_URL =
     import.meta.env.VITE_API_BASE_URL ||
-    (import.meta.env.DEV
-      ? "http://localhost:5000"
-      : "https://ai-chatbot-backend-h669.onrender.com");
+    (import.meta.env.DEV ? "http://localhost:5000" : "https://ai-chatbot-backend-h669.onrender.com");
 
   /* --------------------- load company usage + faqs --------------------- */
   useEffect(() => {
@@ -93,7 +86,7 @@ const ChatTester = () => {
             if (!snapshot.exists()) return;
             const data = snapshot.data();
 
-            // daily reset awareness
+            // Respect daily reset
             const today = new Date().toISOString().slice(0, 10);
             const lastResetDate = data.lastReset?.toDate?.()?.toISOString?.().slice(0, 10);
             const isToday = lastResetDate === today;
@@ -101,27 +94,21 @@ const ChatTester = () => {
             setTokensUsed(isToday ? data.tokensUsedToday || 0 : 0);
 
             const currentTier = data.tier || "free";
-            let currentLimit = 1000;
-            if (currentTier === "pro") currentLimit = 10000;
-            else if (currentTier === "pro-max") currentLimit = 66000;
+            const tierDailyLimits = { free: 1000, pro: 10000, pro_max: 66000 };
+            const tierMonthlyCaps = { free: 30000, pro: 300000, pro_max: 2000000 };
 
+            let currentLimit = tierDailyLimits[currentTier] ?? 1000;
             setTier(currentTier);
+
+            // Monthly cap freeze (if reached, lock dailyLimit to 0)
+            const tokensThisMonth = data.tokensUsedMonth || 0;
+            const monthlyCap = tierMonthlyCaps[currentTier] ?? 30000;
+            if (tokensThisMonth >= monthlyCap) {
+              currentLimit = 0;
+            }
             setDailyLimit(currentLimit);
 
-            if (currentTier === "pro-max") {
-              const now = new Date();
-              const usageMonth = data.monthlyUsageReset?.toDate?.()?.getMonth?.();
-              const usageYear = data.monthlyUsageReset?.toDate?.()?.getFullYear?.();
-              const isSameMonth =
-                usageMonth === now.getMonth() && usageYear === now.getFullYear();
-
-              const tokensThisMonth = data.tokensUsedThisMonth || 0;
-              const maxMonthlyTokens = 2_000_000;
-              if (isSameMonth && tokensThisMonth >= maxMonthlyTokens) {
-                setDailyLimit(0); // freeze for rest of month
-              }
-            }
-
+            // Subscription expiry warning
             const expiresAt = data.subscriptionExpiresAt?.toDate?.();
             if (expiresAt) {
               const now = new Date();
@@ -168,12 +155,11 @@ const ChatTester = () => {
   const isOverLimit = dailyLimit === 0 || tokensUsed >= dailyLimit;
 
   useEffect(() => {
-    if (isNearLimit && !isOverLimit) setShowPricing(true);
+    if ((isNearLimit && !isOverLimit) || isOverLimit) setShowPricing(true);
   }, [isNearLimit, isOverLimit]);
 
   /* --------------------------- chat handlers --------------------------- */
-  const pushUser = (content) =>
-    setMessages((m) => [...m, { role: "user", content }]);
+  const pushUser = (content) => setMessages((m) => [...m, { role: "user", content }]);
   const pushAssistantChunk = (chunk) =>
     setMessages((m) => {
       const copy = [...m];
@@ -192,7 +178,8 @@ const ChatTester = () => {
     if (!userQ.trim() || isOverLimit) return;
 
     setLoading(true);
-    pushUser(userQ);
+    const q = userQ;
+    pushUser(q);
     setUserQ("");
 
     try {
@@ -202,14 +189,12 @@ const ChatTester = () => {
           "Content-Type": "application/json",
           "x-user-id": user.uid,
         },
-        body: JSON.stringify({ question: userQ, faqs }),
+        body: JSON.stringify({ question: q, faqs }), // backend fetches FAQs itself; passing doesn't hurt
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        pushAssistantChunk(
-          errorData.error || "❌ Something went wrong. Please try again."
-        );
+        pushAssistantChunk(errorData.error || "❌ Something went wrong. Please try again.");
         setLoading(false);
         return;
       }
@@ -243,68 +228,81 @@ const ChatTester = () => {
     }
     try {
       const res = await axios.post(`${BASE_URL}/api/create-order`, {
-        plan,
+        plan, // "pro" | "pro_max"
         userId: user.uid,
       });
       const { orderId, amount: razorAmount, currency } = res.data;
 
-      const options = {
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID,
-        amount: razorAmount,
-        currency,
-        name: "Botify",
-        description: `Upgrade to ${plan} Plan`,
-        order_id: orderId,
-        handler: async (response) => {
-          const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = response;
-          if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-            alert("❌ Missing payment details. Redirecting...");
-            return navigate("/");
-          }
-          try {
-            const verifyRes = await axios.post(`${BASE_URL}/api/verify-payment`, {
-              razorpay_order_id,
-              razorpay_payment_id,
-              razorpay_signature,
-            });
-            if (verifyRes.data.success) {
-              alert("✅ Payment Verified! Upgrading...");
-              setTier(plan);
-              setShowPricing(false);
-              navigate("/payment-success", {
-                state: {
-                  plan,
-                  amount: `₹${razorAmount / 100}`,
-                  paymentId: razorpay_payment_id,
-                  orderId: razorpay_order_id,
-                },
+      const openRzp = () => {
+        const options = {
+          key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+          amount: razorAmount,
+          currency,
+          name: "Botify",
+          description: `Upgrade to ${plan === "pro_max" ? "Pro Max" : "Pro"} Plan`,
+          order_id: orderId,
+          handler: async (response) => {
+            const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = response || {};
+            if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+              alert("❌ Missing payment details. Redirecting...");
+              return navigate("/");
+            }
+            try {
+              const verifyRes = await axios.post(`${BASE_URL}/api/verify-payment`, {
+                razorpay_order_id,
+                razorpay_payment_id,
+                razorpay_signature,
               });
-            } else {
+              if (verifyRes.data.success) {
+                alert("✅ Payment Verified! Upgrading...");
+                setTier(plan);
+                setShowPricing(false);
+                navigate("/payment-success", {
+                  state: {
+                    plan,
+                    amount: `₹${razorAmount / 100}`,
+                    paymentId: razorpay_payment_id,
+                    orderId: razorpay_order_id,
+                  },
+                });
+              } else {
+                alert("❌ Payment verification failed.");
+              }
+            } catch (err) {
+              console.error("Verification Error:", err);
               alert("❌ Payment verification failed.");
             }
-          } catch (err) {
-            console.error("Verification Error:", err);
-            alert("❌ Payment verification failed.");
-          }
-        },
-        prefill: {
-          name: user.displayName || "User",
-          email: user.email || "user@example.com",
-        },
-        theme: { color: "#6d28d9" },
-        notes: { billing_label: "Botify" },
-        modal: { ondismiss: () => {} },
+          },
+          prefill: {
+            name: user.displayName || "User",
+            email: user.email || "user@example.com",
+          },
+          theme: { color: "#6d28d9" },
+          notes: { billing_label: "Botify" },
+          modal: { ondismiss: () => {} },
+        };
+
+        const rzp = new window.Razorpay(options);
+        rzp.on("payment.failed", (response) => {
+          console.error("Payment failed:", response?.error);
+          alert(`❌ Payment failed: ${response?.error?.description || "Unknown error"}`);
+        });
+        rzp.open();
       };
 
-      const rzp = new window.Razorpay(options);
-      rzp.on("payment.failed", (response) => {
-        console.error("Payment failed:", response.error);
-        alert(`❌ Payment failed: ${response.error?.description || "Unknown error"}`);
-      });
-      rzp.open();
+      if (!window.Razorpay) {
+        // Lazy-load Razorpay if script tag not present
+        const s = document.createElement("script");
+        s.src = "https://checkout.razorpay.com/v1/checkout.js";
+        s.onload = openRzp;
+        s.onerror = () => alert("❌ Failed to load Razorpay checkout. Try again.");
+        document.body.appendChild(s);
+      } else {
+        openRzp();
+      }
     } catch (err) {
       console.error("Checkout Error:", err);
-      alert(`❌ Payment error. ${err.message || ""}`);
+      alert(`❌ Payment error. ${err?.message || ""}`);
     }
   };
 
@@ -323,19 +321,12 @@ const ChatTester = () => {
     <GlassCard className="p-6 md:p-8 text-white/90">
       {/* Title / limits */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <h2 className="text-2xl md:text-3xl font-semibold tracking-tight">
-          🤖 Test your assistant
-        </h2>
+        <h2 className="text-2xl md:text-3xl font-semibold tracking-tight">🤖 Test your assistant</h2>
         <div className="flex items-center gap-2">
-          <span
-            className={
-              "inline-flex items-center rounded-full px-3 py-1 text-xs " +
-              "border border-white/10 bg-white/5"
-            }
-          >
+          <span className="inline-flex items-center rounded-full px-3 py-1 text-xs border border-white/10 bg-white/5">
             Plan:&nbsp;
             <strong className="ml-1">
-              {tier === "pro-max" ? "Pro Max" : tier[0]?.toUpperCase() + tier.slice(1)}
+              {tier === "pro_max" ? "Pro Max" : tier[0]?.toUpperCase() + tier.slice(1)}
             </strong>
           </span>
           <span className="inline-flex items-center rounded-full px-3 py-1 text-xs border border-emerald-400/20 bg-emerald-400/10 text-emerald-200">
@@ -372,9 +363,7 @@ const ChatTester = () => {
                     : "mr-auto bg-gradient-to-br from-fuchsia-600/25 to-indigo-600/25 border border-fuchsia-400/20")
                 }
               >
-                <div className="text-xs mb-1 opacity-60">
-                  {m.role === "user" ? "You" : "Botify"}
-                </div>
+                <div className="text-xs mb-1 opacity-60">{m.role === "user" ? "You" : "Botify"}</div>
                 <div className="prose prose-invert prose-sm max-w-none">
                   <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>
                     {m.content}
@@ -426,8 +415,12 @@ const ChatTester = () => {
             >
               {loading ? "Thinking…" : "Send →"}
             </button>
-            <IconButton onClick={copyLastAnswer} title="Copy last answer">📋 Copy</IconButton>
-            <IconButton onClick={clearChat} title="Clear conversation">🧹 Reset</IconButton>
+            <IconButton onClick={copyLastAnswer} title="Copy last answer">
+              📋 Copy
+            </IconButton>
+            <IconButton onClick={clearChat} title="Clear conversation">
+              🧹 Reset
+            </IconButton>
           </div>
         </div>
 
@@ -459,16 +452,11 @@ const ChatTester = () => {
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6 text-white shadow-2xl">
             <div className="flex items-start justify-between">
               <h3 className="text-xl font-semibold">🚀 Upgrade your plan</h3>
-              <button
-                className="text-white/60 hover:text-white"
-                onClick={() => setShowPricing(false)}
-              >
+              <button className="text-white/60 hover:text-white" onClick={() => setShowPricing(false)}>
                 ✕
               </button>
             </div>
-            <p className="mt-1 text-sm text-white/60">
-              More tokens, faster responses, premium support.
-            </p>
+            <p className="mt-1 text-sm text-white/60">More tokens, faster responses, premium support.</p>
 
             <div className="mt-5 grid gap-3">
               <div className="rounded-xl border border-white/10 bg-white/5 p-4 hover:bg-white/10 transition">

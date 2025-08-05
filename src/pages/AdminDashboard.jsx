@@ -2,7 +2,13 @@
 import React, { useEffect, useMemo, useRef, useState, useContext } from "react";
 import { db } from "../firebase";
 import {
-  collection, getDocs, doc, updateDoc, Timestamp, query, orderBy,
+  collection,
+  getDocs,
+  doc,
+  updateDoc,
+  Timestamp,
+  query,
+  orderBy,
 } from "firebase/firestore";
 import { AuthContext } from "../context/AuthProvider";
 import { useNavigate } from "react-router-dom";
@@ -11,10 +17,20 @@ import "react-datepicker/dist/react-datepicker.css";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
 } from "recharts";
 import {
-  FaDownload, FaSearch, FaArrowLeft, FaArrowRight, FaExclamationTriangle,
+  FaDownload,
+  FaSearch,
+  FaArrowLeft,
+  FaArrowRight,
+  FaExclamationTriangle,
 } from "react-icons/fa";
 import { MdOutlineFilterAlt } from "react-icons/md";
 
@@ -29,9 +45,13 @@ function useToast() {
     !notice ? null : (
       <div
         className={`fixed top-4 left-1/2 -translate-x-1/2 z-[100] px-4 py-2 text-sm rounded-xl shadow-xl
-        ${notice.type === "error" ? "bg-rose-600/90 text-white"
-          : notice.type === "warn" ? "bg-amber-600/90 text-white"
-          : "bg-emerald-600/90 text-white"}`}
+        ${
+          notice.type === "error"
+            ? "bg-rose-600/90 text-white"
+            : notice.type === "warn"
+            ? "bg-amber-600/90 text-white"
+            : "bg-emerald-600/90 text-white"
+        }`}
       >
         {notice.message}
       </div>
@@ -56,8 +76,11 @@ const Chip = ({ active, children, onClick }) => (
   <button
     onClick={onClick}
     className={`px-3 py-1 rounded-full border transition
-      ${active ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
-               : "bg-white text-indigo-900 border-indigo-200 hover:bg-indigo-50"}`}
+      ${
+        active
+          ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+          : "bg-white text-indigo-900 border-indigo-200 hover:bg-indigo-50"
+      }`}
   >
     {children}
   </button>
@@ -86,7 +109,7 @@ export default function AdminDashboard() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [onlyPaid, setOnlyPaid] = useState(false);
-  const [tierFilter, setTierFilter] = useState("all");
+  const [tierFilter, setTierFilter] = useState("all"); // free | pro | pro_max | all
   const [companyFilter, setCompanyFilter] = useState("all");
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
@@ -95,7 +118,7 @@ export default function AdminDashboard() {
   const rowsPerPage = 10;
   const [page, setPage] = useState(1);
 
-  // --- Fix #1: prevent double fetch in React 18 dev ---
+  // prevent double fetch in React 18 dev
   const didFetch = useRef(false);
 
   useEffect(() => {
@@ -136,17 +159,18 @@ export default function AdminDashboard() {
             email: u.email || "—",
             companyId: u.companyId || null,
             companyName: company?.name || "No Company",
-            tier: company?.tier || "free",
+            tier: company?.tier || "free", // free | pro | pro_max
             tokensUsed: company?.tokensUsedToday || 0,
-            companyUsage: company?.tokensUsedToday || 0,
+            tokensUsedMonth: company?.tokensUsedMonth || 0,
             lastReset: company?.lastReset || null,
-            status: company?.status || "pending",
+            subscriptionExpiresAt: company?.subscriptionExpiresAt || null,
           });
         });
 
         setRows(result);
         setCompanies(companyList);
-      } catch {
+      } catch (e) {
+        console.error(e);
         show("error", "Failed to load data.");
       } finally {
         setLoading(false);
@@ -159,7 +183,7 @@ export default function AdminDashboard() {
   // KPIs
   const kpis = useMemo(() => {
     const totalUsers = rows.length;
-    const paidUsers = rows.filter((r) => r.tier !== "free").length;
+    const paidUsers = rows.filter((r) => r.tier && r.tier !== "free").length;
     const tokensToday = rows.reduce((s, r) => s + (r.tokensUsed || 0), 0);
     const companiesCount = new Set(rows.map((r) => r.companyId).filter(Boolean)).size;
     return { totalUsers, paidUsers, tokensToday, companiesCount };
@@ -170,14 +194,19 @@ export default function AdminDashboard() {
     let out = [...rows];
 
     if (debouncedSearch) {
-      out = out.filter(
-        (r) =>
-          r.email.toLowerCase().includes(debouncedSearch) ||
-          r.userId.toLowerCase().includes(debouncedSearch)
-      );
+      out = out.filter((r) => {
+        const email = (r.email || "").toLowerCase();
+        const uid = (r.userId || "").toLowerCase();
+        const companyName = (r.companyName || "").toLowerCase();
+        return (
+          email.includes(debouncedSearch) ||
+          uid.includes(debouncedSearch) ||
+          companyName.includes(debouncedSearch)
+        );
+      });
     }
     if (onlyPaid) out = out.filter((r) => r.tier && r.tier !== "free");
-    if (tierFilter !== "all") out = out.filter((r) => r.tier === tierFilter);
+    if (tierFilter !== "all") out = out.filter((r) => (r.tier || "free") === tierFilter);
     if (companyFilter !== "all") out = out.filter((r) => r.companyId === companyFilter);
     if (startDate && endDate) {
       out = out.filter((r) => {
@@ -190,19 +219,27 @@ export default function AdminDashboard() {
       const dir = sort.dir === "asc" ? 1 : -1;
       switch (sort.field) {
         case "email":
-          return a.email.localeCompare(b.email) * dir;
+          return (a.email || "").localeCompare(b.email || "") * dir;
         case "tier":
-          return (a.tier || "").localeCompare(b.tier || "") * dir;
+          return ((a.tier || "")).localeCompare(b.tier || "") * dir;
         case "companyName":
           return (a.companyName || "").localeCompare(b.companyName || "") * dir;
         case "tokensUsed":
         default:
-          return (a.tokensUsed - b.tokensUsed) * dir;
+          return ((a.tokensUsed || 0) - (b.tokensUsed || 0)) * dir;
       }
     });
     return out;
   }, [
-    rows, debouncedSearch, onlyPaid, tierFilter, companyFilter, startDate, endDate, sort.field, sort.dir,
+    rows,
+    debouncedSearch,
+    onlyPaid,
+    tierFilter,
+    companyFilter,
+    startDate,
+    endDate,
+    sort.field,
+    sort.dir,
   ]);
 
   // pagination
@@ -241,7 +278,7 @@ export default function AdminDashboard() {
         ? {
             ...r,
             tokensUsed: scope === "daily" ? 0 : r.tokensUsed,
-            companyUsage: scope === "daily" ? 0 : r.companyUsage,
+            tokensUsedMonth: scope === "monthly" ? 0 : r.tokensUsedMonth,
             lastReset: scope === "daily" ? Timestamp.now() : r.lastReset,
           }
         : r
@@ -252,7 +289,7 @@ export default function AdminDashboard() {
       if (scope === "daily") {
         await updateDoc(ref, { tokensUsedToday: 0, lastReset: Timestamp.now() });
       } else {
-        await updateDoc(ref, { tokensUsedThisMonth: 0, monthlyUsageReset: Timestamp.now() });
+        await updateDoc(ref, { tokensUsedMonth: 0, monthlyUsageReset: Timestamp.now() });
       }
       show("success", `Tokens reset (${scope}).`);
     } catch {
@@ -263,17 +300,72 @@ export default function AdminDashboard() {
     }
   };
 
-  // export helpers (unchanged)
+  const extendSubscription = async (companyId, days = 30) => {
+    if (!companyId) return;
+    const ref = doc(db, "companies", companyId);
+    const prev = rows;
+    const next = rows.map((r) => {
+      if (r.companyId !== companyId) return r;
+      const current = r.subscriptionExpiresAt?.toDate?.() || new Date();
+      const extended = new Date(current.getTime() + days * 24 * 60 * 60 * 1000);
+      return { ...r, subscriptionExpiresAt: Timestamp.fromDate(extended) };
+    });
+    setRows(next);
+    try {
+      const snapDate =
+        next.find((r) => r.companyId === companyId)?.subscriptionExpiresAt || Timestamp.now();
+      await updateDoc(ref, { subscriptionExpiresAt: snapDate });
+      show("success", `Extended subscription by ${days} days.`);
+    } catch {
+      setRows(prev);
+      show("error", "Failed to extend subscription.");
+    }
+  };
+
+  const forceDowngradeIfExpired = async (companyId) => {
+    if (!companyId) return;
+    const ref = doc(db, "companies", companyId);
+    try {
+      const now = new Date();
+      // Optimistic: reflect in UI first
+      const prev = rows;
+      const next = rows.map((r) => {
+        if (r.companyId !== companyId) return r;
+        const exp = r.subscriptionExpiresAt?.toDate?.();
+        if (exp && exp < now) return { ...r, tier: "free" };
+        return r;
+      });
+      setRows(next);
+      await updateDoc(ref, { tier: "free" });
+      show("success", "Company downgraded to Free (expired).");
+    } catch {
+      show("error", "Failed to downgrade.");
+    }
+  };
+
+  // export helpers
   const exportCSV = () => {
     const rowsOut = [
-      ["User ID", "Email", "Company", "Tier", "Tokens Today", "Last Reset"],
+      [
+        "User ID",
+        "Email",
+        "Company",
+        "Tier",
+        "Tokens Today",
+        "Tokens This Month",
+        "Last Reset",
+        "Subscription Expires",
+      ],
       ...filtered.map((r) => [
         r.userId,
-        `"${r.email.replace(/"/g, '""')}"`,
+        `"${(r.email || "").replace(/"/g, '""')}"`,
         `"${(r.companyName || "None").replace(/"/g, '""')}"`,
         r.tier,
-        r.tokensUsed,
+        r.tokensUsed || 0,
+        r.tokensUsedMonth || 0,
         r.lastReset?.toDate?.().toISOString?.().slice(0, 19).replace("T", " ") || "N/A",
+        r.subscriptionExpiresAt?.toDate?.()?.toISOString?.().slice(0, 19).replace("T", " ") ||
+          "N/A",
       ]),
     ];
     const csv = rowsOut.map((r) => r.join(",")).join("\n");
@@ -292,14 +384,27 @@ export default function AdminDashboard() {
     docPDF.text(`Exported: ${new Date().toLocaleString()}`, 40, 58);
 
     autoTable(docPDF, {
-      head: [["User ID", "Email", "Company", "Tier", "Tokens Today", "Last Reset"]],
+      head: [
+        [
+          "User ID",
+          "Email",
+          "Company",
+          "Tier",
+          "Tokens Today",
+          "Tokens Month",
+          "Last Reset",
+          "Sub Expires",
+        ],
+      ],
       body: filtered.map((r) => [
         r.userId,
         r.email,
         r.companyName || "None",
         r.tier,
-        String(r.tokensUsed),
+        String(r.tokensUsed || 0),
+        String(r.tokensUsedMonth || 0),
         r.lastReset?.toDate?.().toLocaleString?.() || "N/A",
+        r.subscriptionExpiresAt?.toDate?.()?.toLocaleString?.() || "N/A",
       ]),
       startY: 80,
       styles: { fontSize: 9, cellPadding: 6 },
@@ -338,18 +443,20 @@ export default function AdminDashboard() {
             <h1 className="text-3xl md:text-4xl font-extrabold text-indigo-900 drop-shadow-sm">
               Admin Analytics
             </h1>
-            <p className="text-indigo-800/70 -mt-0.5">Monitor usage, manage plans, keep things humming.</p>
+            <p className="text-indigo-800/70 -mt-0.5">
+              Monitor usage, manage plans, keep things humming.
+            </p>
           </div>
         </div>
 
         <div className="mt-6">
           <AssistantHint>
-            Tip: Filter by <strong>plan</strong> and <strong>company</strong>, then export the exact view to CSV/PDF.
-            You can also set a plan at the <em>company</em> level—updates apply to all users of that org.
+            Tip: Filter by <strong>plan</strong> and <strong>company</strong>, then export the exact view to
+            CSV/PDF. You can set a plan at the <em>company</em> level—updates apply to all users of that org.
           </AssistantHint>
         </div>
 
-        {/* KPI cards (reduced animation to avoid repaint flicker) */}
+        {/* KPI cards */}
         <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
             { label: "Total Users", value: kpis.totalUsers },
@@ -366,18 +473,15 @@ export default function AdminDashboard() {
           ))}
         </div>
 
-        {/* Sticky Controls — solid bg, own layer */}
-        <div
-          className="mt-6 sticky top-2 z-40"
-          style={{ willChange: "transform", transform: "translateZ(0)" }}
-        >
+        {/* Sticky Controls */}
+        <div className="mt-6 sticky top-2 z-40" style={{ willChange: "transform", transform: "translateZ(0)" }}>
           <div className="rounded-2xl bg-white border border-indigo-100 shadow p-4">
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3 items-center">
               <div className="xl:col-span-2 relative">
                 <FaSearch className="absolute left-3 top-3 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Search email or UID"
+                  placeholder="Search email, UID or company"
                   className="w-full pl-10 pr-4 py-2 rounded-xl bg-white border border-indigo-200 focus:ring-2 focus:ring-indigo-400"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -385,10 +489,18 @@ export default function AdminDashboard() {
               </div>
 
               <div className="flex gap-2">
-                <Chip active={tierFilter === "all"} onClick={() => setTierFilter("all")}>All</Chip>
-                <Chip active={tierFilter === "free"} onClick={() => setTierFilter("free")}>Free</Chip>
-                <Chip active={tierFilter === "pro"} onClick={() => setTierFilter("pro")}>Pro</Chip>
-                <Chip active={tierFilter === "pro-max"} onClick={() => setTierFilter("pro-max")}>Pro Max</Chip>
+                <Chip active={tierFilter === "all"} onClick={() => setTierFilter("all")}>
+                  All
+                </Chip>
+                <Chip active={tierFilter === "free"} onClick={() => setTierFilter("free")}>
+                  Free
+                </Chip>
+                <Chip active={tierFilter === "pro"} onClick={() => setTierFilter("pro")}>
+                  Pro
+                </Chip>
+                <Chip active={tierFilter === "pro_max"} onClick={() => setTierFilter("pro_max")}>
+                  Pro Max
+                </Chip>
               </div>
 
               <select
@@ -430,28 +542,43 @@ export default function AdminDashboard() {
             </div>
 
             <div className="mt-3 flex flex-wrap gap-3 justify-end">
-              <button onClick={() => navigate("/admin/leads")} className="rounded-full bg-indigo-600 text-white px-4 py-2 hover:bg-indigo-700">
+              <button
+                onClick={() => navigate("/admin/leads")}
+                className="rounded-full bg-indigo-600 text-white px-4 py-2 hover:bg-indigo-700"
+              >
                 📥 View Leads
               </button>
-              <button onClick={() => navigate("/admin/settings")} className="rounded-full bg-purple-600 text-white px-4 py-2 hover:bg-purple-700">
+              <button
+                onClick={() => navigate("/admin/settings")}
+                className="rounded-full bg-purple-600 text-white px-4 py-2 hover:bg-purple-700"
+              >
                 ⚙️ Bot Settings
               </button>
-              <button onClick={exportCSV} className="inline-flex items-center gap-2 rounded-full bg-emerald-600 text-white px-4 py-2 hover:bg-emerald-700">
+              <button
+                onClick={exportCSV}
+                className="inline-flex items-center gap-2 rounded-full bg-emerald-600 text-white px-4 py-2 hover:bg-emerald-700"
+              >
                 <FaDownload /> CSV
               </button>
-              <button onClick={exportPDF} className="inline-flex items-center gap-2 rounded-full bg-sky-600 text-white px-4 py-2 hover:bg-sky-700">
+              <button
+                onClick={exportPDF}
+                className="inline-flex items-center gap-2 rounded-full bg-sky-600 text-white px-4 py-2 hover:bg-sky-700"
+              >
                 <FaDownload /> PDF
               </button>
             </div>
           </div>
         </div>
 
-        {/* Chart (solid bg, higher z) */}
+        {/* Chart */}
         <div className="mt-6 rounded-2xl border border-indigo-100 bg-white p-4 z-10 relative">
           <h2 className="text-lg font-bold text-indigo-900 mb-2">📊 Token Usage (Today)</h2>
           <div className="h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={filtered.slice(0, 30)} margin={{ top: 8, right: 16, left: -16, bottom: 8 }}>
+              <BarChart
+                data={filtered.slice(0, 30)}
+                margin={{ top: 8, right: 16, left: -16, bottom: 8 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="email" interval={0} angle={-25} textAnchor="end" height={70} />
                 <YAxis />
@@ -462,18 +589,30 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Table (solid bg, higher z) */}
+        {/* Table */}
         <div className="mt-6 overflow-hidden rounded-2xl border border-indigo-100 bg-white z-10 relative">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-indigo-50">
                 <tr className="text-indigo-900">
-                  <th className="px-4 py-3 text-left"><SortBtn field="userId">User ID</SortBtn></th>
-                  <th className="px-4 py-3 text-left"><SortBtn field="email">Email</SortBtn></th>
-                  <th className="px-4 py-3 text-left"><SortBtn field="companyName">Company</SortBtn></th>
-                  <th className="px-4 py-3 text-left"><SortBtn field="tier">Plan</SortBtn></th>
-                  <th className="px-4 py-3 text-left"><SortBtn field="tokensUsed">Tokens Today</SortBtn></th>
+                  <th className="px-4 py-3 text-left">
+                    <SortBtn field="userId">User ID</SortBtn>
+                  </th>
+                  <th className="px-4 py-3 text-left">
+                    <SortBtn field="email">Email</SortBtn>
+                  </th>
+                  <th className="px-4 py-3 text-left">
+                    <SortBtn field="companyName">Company</SortBtn>
+                  </th>
+                  <th className="px-4 py-3 text-left">
+                    <SortBtn field="tier">Plan</SortBtn>
+                  </th>
+                  <th className="px-4 py-3 text-left">
+                    <SortBtn field="tokensUsed">Tokens Today</SortBtn>
+                  </th>
+                  <th className="px-4 py-3 text-left">Tokens Month</th>
                   <th className="px-4 py-3 text-left">Last Reset</th>
+                  <th className="px-4 py-3 text-left">Sub Expires</th>
                   <th className="px-4 py-3 text-left">Actions</th>
                 </tr>
               </thead>
@@ -481,7 +620,7 @@ export default function AdminDashboard() {
                 {loading ? (
                   [...Array(6)].map((_, i) => (
                     <tr key={i} className="border-t">
-                      {Array.from({ length: 7 }).map((__, j) => (
+                      {Array.from({ length: 9 }).map((__, j) => (
                         <td key={j} className="px-4 py-3">
                           <div className="h-4 w-40 bg-gray-200 rounded animate-pulse" />
                         </td>
@@ -490,7 +629,7 @@ export default function AdminDashboard() {
                   ))
                 ) : paginated.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="px-4 py-10 text-center">
+                    <td colSpan="9" className="px-4 py-10 text-center">
                       <div className="inline-flex items-center gap-2 text-indigo-700">
                         <span>😶‍🌫️</span>
                         <span>No records match your filters.</span>
@@ -498,53 +637,108 @@ export default function AdminDashboard() {
                     </td>
                   </tr>
                 ) : (
-                  paginated.map((r) => (
-                    <tr key={r.userId} className={`border-t ${r.tokensUsed > 1000 ? "bg-yellow-50/60" : ""}`}>
-                      <td className="px-4 py-2 font-mono text-[11px] text-gray-600">{r.userId}</td>
-                      <td className="px-4 py-2">{r.email}</td>
-                      <td className="px-4 py-2">{r.companyName}</td>
-                      <td className="px-4 py-2">
-                        <div className="flex items-center gap-2">
-                          <Badge tone={r.tier === "pro-max" ? "purple" : r.tier === "pro" ? "green" : "gray"}>
-                            {r.tier === "pro-max" ? "Pro Max" : r.tier.charAt(0).toUpperCase() + r.tier.slice(1)}
-                          </Badge>
-                          {r.companyId && (
-                            <select
-                              value={r.tier}
-                              onChange={(e) => updateCompanyTier(r.companyId, e.target.value)}
-                              className="border rounded-full px-2 py-1 focus:ring-1 focus:ring-indigo-400 text-xs"
+                  paginated.map((r) => {
+                    const exp = r.subscriptionExpiresAt?.toDate?.();
+                    const expired = exp && exp < new Date();
+                    return (
+                      <tr
+                        key={r.userId}
+                        className={`border-t ${
+                          (r.tokensUsed || 0) > 1000 ? "bg-yellow-50/60" : ""
+                        }`}
+                      >
+                        <td className="px-4 py-2 font-mono text-[11px] text-gray-600">
+                          {r.userId}
+                        </td>
+                        <td className="px-4 py-2">{r.email}</td>
+                        <td className="px-4 py-2">{r.companyName}</td>
+                        <td className="px-4 py-2">
+                          <div className="flex items-center gap-2">
+                            <Badge
+                              tone={
+                                r.tier === "pro_max"
+                                  ? "purple"
+                                  : r.tier === "pro"
+                                  ? "green"
+                                  : "gray"
+                              }
                             >
-                              <option value="free">Free</option>
-                              <option value="pro">Pro</option>
-                              <option value="pro-max">Pro Max</option>
-                            </select>
+                              {r.tier === "pro_max"
+                                ? "Pro Max"
+                                : r.tier.charAt(0).toUpperCase() + r.tier.slice(1)}
+                            </Badge>
+                            {r.companyId && (
+                              <select
+                                value={r.tier}
+                                onChange={(e) =>
+                                  updateCompanyTier(r.companyId, e.target.value)
+                                }
+                                className="border rounded-full px-2 py-1 focus:ring-1 focus:ring-indigo-400 text-xs"
+                              >
+                                <option value="free">Free</option>
+                                <option value="pro">Pro</option>
+                                <option value="pro_max">Pro Max</option>
+                              </select>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-2">{r.tokensUsed || 0}</td>
+                        <td className="px-4 py-2">{r.tokensUsedMonth || 0}</td>
+                        <td className="px-4 py-2">
+                          {r.lastReset?.toDate?.()?.toLocaleString?.() || "N/A"}
+                        </td>
+                        <td className="px-4 py-2">
+                          {exp ? (
+                            <span className={expired ? "text-rose-600" : ""}>
+                              {exp.toLocaleString()}
+                            </span>
+                          ) : (
+                            "—"
                           )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-2">{r.tokensUsed}</td>
-                      <td className="px-4 py-2">{r.lastReset?.toDate?.().toLocaleString?.() || "N/A"}</td>
-                      <td className="px-4 py-2">
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            onClick={() => setConfirm({ companyId: r.companyId, scope: "daily" })}
-                            className="text-xs bg-rose-500 text-white px-2 py-1 rounded-full hover:bg-rose-600"
-                            disabled={!r.companyId}
-                            title="Reset today's tokens"
-                          >
-                            Reset Daily
-                          </button>
-                          <button
-                            onClick={() => setConfirm({ companyId: r.companyId, scope: "monthly" })}
-                            className="text-xs bg-amber-500 text-white px-2 py-1 rounded-full hover:bg-amber-600"
-                            disabled={!r.companyId}
-                            title="Reset monthly tokens"
-                          >
-                            Reset Monthly
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="px-4 py-2">
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              onClick={() =>
+                                setConfirm({ companyId: r.companyId, scope: "daily" })
+                              }
+                              className="text-xs bg-rose-500 text-white px-2 py-1 rounded-full hover:bg-rose-600"
+                              disabled={!r.companyId}
+                              title="Reset today's tokens"
+                            >
+                              Reset Daily
+                            </button>
+                            <button
+                              onClick={() =>
+                                setConfirm({ companyId: r.companyId, scope: "monthly" })
+                              }
+                              className="text-xs bg-amber-500 text-white px-2 py-1 rounded-full hover:bg-amber-600"
+                              disabled={!r.companyId}
+                              title="Reset monthly tokens"
+                            >
+                              Reset Monthly
+                            </button>
+                            <button
+                              onClick={() => extendSubscription(r.companyId, 30)}
+                              className="text-xs bg-emerald-600 text-white px-2 py-1 rounded-full hover:bg-emerald-700"
+                              disabled={!r.companyId}
+                              title="Extend subscription by 30 days"
+                            >
+                              +30d
+                            </button>
+                            <button
+                              onClick={() => forceDowngradeIfExpired(r.companyId)}
+                              className="text-xs bg-gray-700 text-white px-2 py-1 rounded-full hover:bg-gray-800"
+                              disabled={!r.companyId || !expired}
+                              title="Force downgrade to Free if expired"
+                            >
+                              Downgrade (expired)
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -559,7 +753,9 @@ export default function AdminDashboard() {
             >
               <FaArrowLeft /> Prev
             </button>
-            <span className="text-sm text-gray-600">Page {pageSafe} of {totalPages}</span>
+            <span className="text-sm text-gray-600">
+              Page {pageSafe} of {totalPages}
+            </span>
             <button
               disabled={pageSafe === totalPages}
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
@@ -580,17 +776,24 @@ export default function AdminDashboard() {
             </div>
             <p className="mt-2 text-sm text-gray-700">
               Are you sure you want to reset{" "}
-              <strong>{confirm.scope === "daily" ? "today’s tokens" : "this month’s tokens"}</strong>{" "}
+              <strong>
+                {confirm.scope === "daily" ? "today’s tokens" : "this month’s tokens"}
+              </strong>{" "}
               for this company? This action cannot be undone.
             </p>
             <div className="mt-4 flex gap-2 justify-end">
-              <button onClick={() => setConfirm(null)} className="rounded-full bg-gray-200 px-4 py-2 hover:bg-gray-300">
+              <button
+                onClick={() => setConfirm(null)}
+                className="rounded-full bg-gray-200 px-4 py-2 hover:bg-gray-300"
+              >
                 Cancel
               </button>
               <button
                 onClick={() => resetTokens(confirm.companyId, confirm.scope)}
                 className={`rounded-full px-4 py-2 text-white ${
-                  confirm.scope === "daily" ? "bg-rose-600 hover:bg-rose-700" : "bg-amber-600 hover:bg-amber-700"
+                  confirm.scope === "daily"
+                    ? "bg-rose-600 hover:bg-rose-700"
+                    : "bg-amber-600 hover:bg-amber-700"
                 }`}
               >
                 Reset {confirm.scope === "daily" ? "Daily" : "Monthly"}
