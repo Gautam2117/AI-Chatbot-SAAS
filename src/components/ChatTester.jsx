@@ -60,6 +60,9 @@ const ChatTester = () => {
   const [messages,      setMessages]      = useState([]);   // chat transcript
   const [loading,       setLoading]       = useState(false);
 
+  /* company workspace we attach the subscription to */
+  const [companyId,     setCompanyId]     = useState(null); // ← NEW
+
   /* usage / quota */
   const [messagesUsed,  setMessagesUsed]  = useState(0);
   const [monthlyLimit,  setMonthlyLimit]  = useState(150);
@@ -92,11 +95,13 @@ const ChatTester = () => {
 
     (async () => {
       const userSnap = await getDoc(doc(db, "users", user.uid));
-      const companyId = userSnap.data()?.companyId;
-      if (!companyId) return;
+      const cId = userSnap.data()?.companyId;
+      if (!cId) return;
+
+      setCompanyId(cId);
 
       /* usage listener */
-      unsubUsage = onSnapshot(doc(db, "companies", companyId), (snap) => {
+      unsubUsage = onSnapshot(doc(db, "companies", cId), (snap) => {
         if (!snap.exists()) return;
         const d = snap.data() || {};
 
@@ -124,7 +129,7 @@ const ChatTester = () => {
 
       /* FAQ listener */
       unsubFaqs = onSnapshot(
-        collection(db, "faqs", companyId, "list"),
+        collection(db, "faqs", cId, "list"),
         (snap) => setFaqs(snap.docs.map((d) => d.data()))
       );
     })();
@@ -201,6 +206,7 @@ const ChatTester = () => {
       const { data } = await axios.post(`${BASE_URL}/api/billing/subscribe`, {
         planKey,
         userId:   user.uid,
+        companyId,                                 // 👈 now supplied
         customer: { name: user.displayName, email: user.email },
       });
 
@@ -225,8 +231,9 @@ const ChatTester = () => {
         document.body.appendChild(s);
       } else launch();
     } catch (e) {
-      console.error("Checkout error:", e);
-      alert("❌ Unable to start checkout. Try again.");
+      const msg = e?.response?.data?.error || e.message || "Unknown error";
+      console.error("Checkout error:", msg);
+      alert(`❌ Checkout failed: ${msg}`);
     }
   };
 
