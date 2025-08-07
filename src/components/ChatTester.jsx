@@ -1,15 +1,21 @@
+// src/components/ChatTester.jsx
 import React, { useContext, useState, useEffect, useMemo } from "react";
-import axios from "axios";
 import { AuthContext } from "../context/AuthProvider";
 import { db } from "../firebase";
-import { doc, getDoc, collection, onSnapshot } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  collection,
+  onSnapshot,
+} from "firebase/firestore";
+import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { TypeAnimation } from "react-type-animation";
 import rehypeSanitize from "rehype-sanitize";
+import { TypeAnimation } from "react-type-animation";
 
-/* ------------------- tiny UI atoms ------------------- */
+/* ───────────────────────────────── UI atoms ──────────────────────────────── */
 const GlassCard = ({ children, className = "" }) => (
   <div
     className={
@@ -36,318 +42,232 @@ const IconButton = ({ onClick, children, title, disabled }) => (
   </button>
 );
 
-/* ----------------------------------------------------- */
-
+/* ─────────────────────────────── Component ──────────────────────────────── */
 const ChatTester = () => {
   const { user } = useContext(AuthContext);
-  const [faqs, setFaqs] = useState([]);
-  const [userQ, setUserQ] = useState("");
-  const [messages, setMessages] = useState([]); // {role:'user'|'assistant', content:string}
-  const [loading, setLoading] = useState(false);
+  const navigate   = useNavigate();
 
-  // quotas
-  const [tokensUsed, setTokensUsed] = useState(0);
-  const [dailyLimit, setDailyLimit] = useState(1000);
-  const [tier, setTier] = useState("free");
-  const [subscriptionExpiryWarning, setSubscriptionExpiryWarning] = useState("");
-
-  // pricing
-  const [showPricing, setShowPricing] = useState(false);
-
-  const navigate = useNavigate();
-
+  /* Backend base URL */
   const BASE_URL =
     import.meta.env.VITE_API_BASE_URL ||
-    (import.meta.env.DEV ? "http://localhost:5000" : "https://ai-chatbot-backend-h669.onrender.com");
+    (import.meta.env.DEV
+      ? "http://localhost:5000"
+      : "https://ai-chatbot-backend-h669.onrender.com");
 
-  /* --------------------- load company usage + faqs --------------------- */
+  /* ─────────── local state ─────────── */
+  const [faqs,          setFaqs]          = useState([]);
+  const [userQ,         setUserQ]         = useState("");
+  const [messages,      setMessages]      = useState([]);   // chat transcript
+  const [loading,       setLoading]       = useState(false);
+
+  /* usage / quota */
+  const [messagesUsed,  setMessagesUsed]  = useState(0);
+  const [monthlyLimit,  setMonthlyLimit]  = useState(150);
+  const [tier,          setTier]          = useState("free");
+  const [expiryWarn,    setExpiryWarn]    = useState("");
+
+  /* pricing modal */
+  const [showPricing,   setShowPricing]   = useState(false);
+  const [billingCycle,  setBillingCycle]  = useState("monthly"); // or "yearly"
+  const [plans,         setPlans]         = useState(null);      // fetched catalogue
+
+  /* ─────────── fetch plan catalogue once ─────────── */
   useEffect(() => {
-    if (!user?.uid) return;
-
-    let unsubscribeUsage = null;
-    let unsubscribeFAQ = null;
-
+    let ignore = false;
     (async () => {
       try {
-        const userRef = doc(db, "users", user.uid);
-        const userSnap = await getDoc(userRef);
-        const userData = userSnap.data();
-
-        if (!userData?.companyId) return;
-
-        const companyId = userData.companyId;
-        const usageRef = doc(db, "companies", companyId);
-        const faqCollection = collection(db, "faqs", companyId, "list");
-
-        // usage listener
-        unsubscribeUsage = onSnapshot(
-          usageRef,
-          (snapshot) => {
-            if (!snapshot.exists()) return;
-            const data = snapshot.data();
-
-            // Respect daily reset
-            const today = new Date().toISOString().slice(0, 10);
-            const lastResetDate = data.lastReset?.toDate?.()?.toISOString?.().slice(0, 10);
-            const isToday = lastResetDate === today;
-
-            setTokensUsed(isToday ? data.tokensUsedToday || 0 : 0);
-
-            const currentTier = data.tier || "free";
-            const tierDailyLimits = { free: 1000, pro: 10000, pro_max: 66000 };
-            const tierMonthlyCaps = { free: 30000, pro: 300000, pro_max: 2000000 };
-
-            let currentLimit = tierDailyLimits[currentTier] ?? 1000;
-            setTier(currentTier);
-
-            // Monthly cap freeze (if reached, lock dailyLimit to 0)
-            const tokensThisMonth = data.tokensUsedMonth || 0;
-            const monthlyCap = tierMonthlyCaps[currentTier] ?? 30000;
-            if (tokensThisMonth >= monthlyCap) {
-              currentLimit = 0;
-            }
-            setDailyLimit(currentLimit);
-
-            // Subscription expiry warning
-            const expiresAt = data.subscriptionExpiresAt?.toDate?.();
-            if (expiresAt) {
-              const now = new Date();
-              const daysLeft = Math.ceil((expiresAt - now) / 86_400_000);
-              if (daysLeft <= 5 && daysLeft > 0) {
-                setSubscriptionExpiryWarning(
-                  `⚠️ Your subscription expires in ${daysLeft} day${daysLeft > 1 ? "s" : ""}.`
-                );
-              } else if (daysLeft <= 0) {
-                setSubscriptionExpiryWarning("⚠️ Your subscription has expired.");
-              } else {
-                setSubscriptionExpiryWarning("");
-              }
-            } else {
-              setSubscriptionExpiryWarning("");
-            }
-          },
-          (error) => console.error("usage snapshot error:", error.message)
-        );
-
-        // faq listener
-        unsubscribeFAQ = onSnapshot(
-          faqCollection,
-          (snapshot) => setFaqs(snapshot.docs.map((d) => d.data())),
-          (error) => console.error("faq snapshot error:", error.message)
-        );
-      } catch (err) {
-        console.error("fetch company error:", err.message);
+        const { data } = await axios.get(`${BASE_URL}/api/billing/plans`);
+        if (!ignore) setPlans(data);
+      } catch (e) {
+        console.error("Failed to fetch plan catalogue:", e.message);
       }
+    })();
+    return () => { ignore = true };
+  }, [BASE_URL]);
+
+  /* ─────────── live usage + FAQ listeners ─────────── */
+  useEffect(() => {
+    if (!user?.uid) return;
+    let unsubUsage, unsubFaqs;
+
+    (async () => {
+      const userSnap = await getDoc(doc(db, "users", user.uid));
+      const companyId = userSnap.data()?.companyId;
+      if (!companyId) return;
+
+      /* usage listener */
+      unsubUsage = onSnapshot(doc(db, "companies", companyId), (snap) => {
+        if (!snap.exists()) return;
+        const d = snap.data() || {};
+
+        /* monthly counter */
+        const used = d.messagesUsedMonth || 0;
+        setMessagesUsed(used);
+
+        /* tier & caps */
+        const curTier       = d.tier || "free";
+        setTier(curTier);
+        const caps          = { free: 150, pro: 3000, pro_max: 15000 };
+        setMonthlyLimit(caps[curTier] ?? 150);
+
+        /* expiry warning */
+        const end = d.currentPeriodEnd?.toDate?.();
+        if (end) {
+          const daysLeft = Math.ceil((end - new Date()) / 86_400_000);
+          if (daysLeft <= 0)
+            setExpiryWarn("⚠️  Subscription expired.");
+          else if (daysLeft <= 5)
+            setExpiryWarn(`⚠️  Expires in ${daysLeft} day${daysLeft > 1 ? "s" : ""}.`);
+          else setExpiryWarn("");
+        } else setExpiryWarn("");
+      });
+
+      /* FAQ listener */
+      unsubFaqs = onSnapshot(
+        collection(db, "faqs", companyId, "list"),
+        (snap) => setFaqs(snap.docs.map((d) => d.data()))
+      );
     })();
 
     return () => {
-      if (unsubscribeUsage) unsubscribeUsage();
-      if (unsubscribeFAQ) unsubscribeFAQ();
+      unsubUsage?.(); unsubFaqs?.();
     };
   }, [user?.uid]);
 
-  /* ------------------------- derived UI state -------------------------- */
+  /* ─────────── derived values ─────────── */
   const percentUsed = useMemo(
-    () => (dailyLimit ? (tokensUsed / dailyLimit) * 100 : 100),
-    [tokensUsed, dailyLimit]
+    () => (monthlyLimit ? (messagesUsed / monthlyLimit) * 100 : 100),
+    [messagesUsed, monthlyLimit]
   );
-  const isNearLimit = percentUsed >= 80 && percentUsed < 100;
-  const isOverLimit = dailyLimit === 0 || tokensUsed >= dailyLimit;
+  const nearLimit = percentUsed >= 80 && percentUsed < 100;
+  const overLimit = messagesUsed >= monthlyLimit;
 
-  useEffect(() => {
-    if ((isNearLimit && !isOverLimit) || isOverLimit) setShowPricing(true);
-  }, [isNearLimit, isOverLimit]);
+  /* auto-open pricing when quota tight */
+  useEffect(() => { if (nearLimit || overLimit) setShowPricing(true); }, [nearLimit, overLimit]);
 
-  /* --------------------------- chat handlers --------------------------- */
-  const pushUser = (content) => setMessages((m) => [...m, { role: "user", content }]);
-  const pushAssistantChunk = (chunk) =>
+  /* ─────────── chat helpers ─────────── */
+  const pushUser      = (txt)  => setMessages((m) => [...m, { role: "user",      content: txt }]);
+  const pushAssistant = (txt)  =>
     setMessages((m) => {
-      const copy = [...m];
-      if (!copy.length || copy[copy.length - 1].role !== "assistant") {
-        copy.push({ role: "assistant", content: "" });
-      }
-      copy[copy.length - 1].content += chunk;
-      return copy;
+      const clone = [...m];
+      if (!clone.length || clone[clone.length - 1].role !== "assistant")
+        clone.push({ role: "assistant", content: "" });
+      clone[clone.length - 1].content += txt;
+      return clone;
     });
 
-  const testChat = async () => {
-    if (!user?.uid) {
-      alert("🔒 Please log in to use the chatbot.");
-      return;
-    }
-    if (!userQ.trim() || isOverLimit) return;
+  /* ─────────── send question ─────────── */
+  const ask = async () => {
+    if (!user?.uid)                   return alert("🔒 Please log in.");
+    if (!userQ.trim() || overLimit)   return;
 
-    setLoading(true);
-    const q = userQ;
-    pushUser(q);
-    setUserQ("");
+    setLoading(true); pushUser(userQ);
+    const q = userQ; setUserQ("");
 
     try {
-      const response = await fetch(`${BASE_URL}/api/chat`, {
+      const res = await fetch(`${BASE_URL}/api/chat`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-user-id": user.uid,
-        },
-        body: JSON.stringify({ question: q, faqs }), // backend fetches FAQs itself; passing doesn't hurt
+        headers: { "Content-Type": "application/json", "x-user-id": user.uid },
+        body: JSON.stringify({ question: q, faqs }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        pushAssistantChunk(errorData.error || "❌ Something went wrong. Please try again.");
-        setLoading(false);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        pushAssistant(err.error || "❌ Something went wrong");
         return;
       }
+      const reader = res.body?.getReader();
+      if (!reader) { pushAssistant("⚠️  Streaming not supported."); return; }
 
-      if (!response.body) {
-        pushAssistantChunk("⚠️ Streaming not supported by this browser.");
-        setLoading(false);
-        return;
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-
+      const dec = new TextDecoder();
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-        pushAssistantChunk(decoder.decode(value, { stream: true }));
+        pushAssistant(dec.decode(value, { stream: true }));
       }
-      setLoading(false);
-    } catch (err) {
-      console.error("stream error:", err);
-      pushAssistantChunk("❌ Failed to fetch response.");
+    } catch (e) {
+      console.error(e);
+      pushAssistant("❌ Failed to fetch response");
+    } finally {
       setLoading(false);
     }
   };
 
-  const handleCheckout = async (plan) => {
-    if (!user?.uid) {
-      alert("🔒 Please log in to upgrade.");
-      return;
-    }
+  /* ─────────── checkout (flow uses /api/billing/subscribe) ─────────── */
+  const openCheckout = async (planKey) => {
+    if (!user?.uid) return alert("🔒 Please log in.");
+
     try {
-      const res = await axios.post(`${BASE_URL}/api/create-order`, {
-        plan, // "pro" | "pro_max"
-        userId: user.uid,
+      const { data } = await axios.post(`${BASE_URL}/api/billing/subscribe`, {
+        planKey,
+        userId:   user.uid,
+        customer: { name: user.displayName, email: user.email },
       });
-      const { orderId, amount: razorAmount, currency } = res.data;
 
-      const openRzp = () => {
-        const options = {
-          key: import.meta.env.VITE_RAZORPAY_KEY_ID,
-          amount: razorAmount,
-          currency,
-          name: "Botify",
-          description: `Upgrade to ${plan === "pro_max" ? "Pro Max" : "Pro"} Plan`,
-          order_id: orderId,
-          handler: async (response) => {
-            const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = response || {};
-            if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-              alert("❌ Missing payment details. Redirecting...");
-              return navigate("/");
-            }
-            try {
-              const verifyRes = await axios.post(`${BASE_URL}/api/verify-payment`, {
-                razorpay_order_id,
-                razorpay_payment_id,
-                razorpay_signature,
-              });
-              if (verifyRes.data.success) {
-                alert("✅ Payment Verified! Upgrading...");
-                setTier(plan);
-                setShowPricing(false);
-                navigate("/payment-success", {
-                  state: {
-                    plan,
-                    amount: `₹${razorAmount / 100}`,
-                    paymentId: razorpay_payment_id,
-                    orderId: razorpay_order_id,
-                  },
-                });
-              } else {
-                alert("❌ Payment verification failed.");
-              }
-            } catch (err) {
-              console.error("Verification Error:", err);
-              alert("❌ Payment verification failed.");
-            }
-          },
-          prefill: {
-            name: user.displayName || "User",
-            email: user.email || "user@example.com",
-          },
+      const launch = () => {
+        const rzp = new window.Razorpay({
+          key: data.checkout.key,
+          subscription_id: data.checkout.subscription_id,
+          customer_id:     data.checkout.customer_id,
+          notes:           data.checkout.notes,
           theme: { color: "#6d28d9" },
-          notes: { billing_label: "Botify" },
-          modal: { ondismiss: () => {} },
-        };
-
-        const rzp = new window.Razorpay(options);
-        rzp.on("payment.failed", (response) => {
-          console.error("Payment failed:", response?.error);
-          alert(`❌ Payment failed: ${response?.error?.description || "Unknown error"}`);
+          handler: () => {
+            alert("✅ Subscription started!"); setShowPricing(false);
+          },
         });
         rzp.open();
       };
 
       if (!window.Razorpay) {
-        // Lazy-load Razorpay if script tag not present
         const s = document.createElement("script");
         s.src = "https://checkout.razorpay.com/v1/checkout.js";
-        s.onload = openRzp;
-        s.onerror = () => alert("❌ Failed to load Razorpay checkout. Try again.");
+        s.onload = launch; s.onerror = () => alert("❌ Unable to load Razorpay");
         document.body.appendChild(s);
-      } else {
-        openRzp();
-      }
-    } catch (err) {
-      console.error("Checkout Error:", err);
-      alert(`❌ Payment error. ${err?.message || ""}`);
+      } else launch();
+    } catch (e) {
+      console.error("Checkout error:", e);
+      alert("❌ Unable to start checkout. Try again.");
     }
   };
 
-  const copyLastAnswer = async () => {
+  /* ─────────── clipboard / reset ─────────── */
+  const copyLast = async () => {
     const last = [...messages].reverse().find((m) => m.role === "assistant");
-    if (!last?.content) return;
-    try {
-      await navigator.clipboard.writeText(last.content);
-    } catch {}
+    if (last?.content) try { await navigator.clipboard.writeText(last.content); } catch {}
   };
-
   const clearChat = () => setMessages([]);
 
-  /* ------------------------------- UI -------------------------------- */
+  /* ─────────────────────────────── render ─────────────────────────────── */
   return (
     <GlassCard className="p-6 md:p-8 text-white/90">
-      {/* Title / limits */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <h2 className="text-2xl md:text-3xl font-semibold tracking-tight">🤖 Test your assistant</h2>
+      {/* Header */}
+      <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <h2 className="text-2xl md:text-3xl font-semibold">🤖 Test your assistant</h2>
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center rounded-full px-3 py-1 text-xs border border-white/10 bg-white/5">
-            Plan:&nbsp;
-            <strong className="ml-1">
-              {tier === "pro_max" ? "Pro Max" : tier[0]?.toUpperCase() + tier.slice(1)}
+            Plan:&nbsp;<strong className="ml-1">
+              {tier === "pro_max" ? "Pro Max" : tier.charAt(0).toUpperCase() + tier.slice(1)}
             </strong>
           </span>
           <span className="inline-flex items-center rounded-full px-3 py-1 text-xs border border-emerald-400/20 bg-emerald-400/10 text-emerald-200">
-            🔋 {tokensUsed}/{dailyLimit} tokens
+            📈 {messagesUsed}/{monthlyLimit} msgs
           </span>
           <IconButton onClick={() => setShowPricing(true)}>💳 Upgrade</IconButton>
         </div>
-      </div>
+      </header>
 
-      {subscriptionExpiryWarning && (
+      {expiryWarn && (
         <div className="mt-3 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-sm text-amber-100">
-          {subscriptionExpiryWarning}
+          {expiryWarn}
         </div>
       )}
 
-      {/* Chat surface */}
+      {/* Chat area */}
       <div className="mt-6 grid gap-4">
-        {/* Messages */}
+        {/* Transcript */}
         <div className="rounded-2xl border border-white/10 bg-black/30 p-4 max-h-[420px] overflow-y-auto">
-          {messages.length === 0 && (
-            <div className="text-center text-white/50 text-sm py-10">
+          {!messages.length && (
+            <div className="text-center text-white/50 py-10">
               Ask a question about your FAQs to see how Botify responds.
             </div>
           )}
@@ -364,11 +284,13 @@ const ChatTester = () => {
                 }
               >
                 <div className="text-xs mb-1 opacity-60">{m.role === "user" ? "You" : "Botify"}</div>
-                <div className="prose prose-invert prose-sm max-w-none">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>
-                    {m.content}
-                  </ReactMarkdown>
-                </div>
+                <ReactMarkdown
+                  className="prose prose-invert prose-sm max-w-none"
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeSanitize]}
+                >
+                  {m.content}
+                </ReactMarkdown>
               </div>
             ))}
 
@@ -376,51 +298,42 @@ const ChatTester = () => {
               <div className="mr-auto max-w-[85%] rounded-2xl px-4 py-3 bg-gradient-to-br from-fuchsia-600/25 to-indigo-600/25 border border-fuchsia-400/20">
                 <div className="text-xs mb-1 opacity-60">Botify</div>
                 <span className="inline-flex items-center text-white/80">
-                  <TypeAnimation
-                    sequence={["Thinking…", 800, "Thinking…", 800]}
-                    speed={50}
-                    repeat={Infinity}
-                    wrapper="span"
-                  />
-                  <span className="ml-2 h-2 w-2 rounded-full bg-fuchsia-400 animate-pulse"></span>
+                  <TypeAnimation sequence={["Thinking…", 800]} speed={50} repeat={Infinity} />
+                  <span className="ml-2 h-2 w-2 rounded-full bg-fuchsia-400 animate-pulse" />
                 </span>
               </div>
             )}
           </div>
         </div>
 
-        {/* Input row */}
+        {/* Input */}
         <div className="flex flex-col md:flex-row gap-3">
           <input
             type="text"
+            placeholder="Ask something…"
+            value={userQ}
+            onChange={(e) => setUserQ(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && ask()}
+            disabled={overLimit || loading}
             className={
               "w-full rounded-2xl border border-white/15 bg-white/5 px-4 py-3 " +
               "placeholder-white/40 text-white focus:outline-none focus:ring-2 focus:ring-fuchsia-400/40"
             }
-            placeholder="Ask something…"
-            value={userQ}
-            onChange={(e) => setUserQ(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && testChat()}
-            disabled={isOverLimit || loading}
           />
           <div className="flex items-center gap-2">
             <button
-              onClick={testChat}
-              disabled={loading || isOverLimit || !userQ.trim()}
+              onClick={ask}
+              disabled={loading || overLimit || !userQ.trim()}
               className={
                 "rounded-2xl bg-gradient-to-r from-fuchsia-500 to-indigo-500 px-5 py-3 text-sm font-medium " +
                 "shadow hover:from-fuchsia-400 hover:to-indigo-400 active:scale-[0.98] transition " +
-                (loading || isOverLimit || !userQ.trim() ? "opacity-60" : "")
+                (loading || overLimit || !userQ.trim() ? "opacity-60" : "")
               }
             >
               {loading ? "Thinking…" : "Send →"}
             </button>
-            <IconButton onClick={copyLastAnswer} title="Copy last answer">
-              📋 Copy
-            </IconButton>
-            <IconButton onClick={clearChat} title="Clear conversation">
-              🧹 Reset
-            </IconButton>
+            <IconButton onClick={copyLast} title="Copy last answer">📋 Copy</IconButton>
+            <IconButton onClick={clearChat} title="Clear chat">🧹 Reset</IconButton>
           </div>
         </div>
 
@@ -447,7 +360,7 @@ const ChatTester = () => {
       </div>
 
       {/* Pricing modal */}
-      {showPricing && (
+      {showPricing && plans && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6 text-white shadow-2xl">
             <div className="flex items-start justify-between">
@@ -456,48 +369,98 @@ const ChatTester = () => {
                 ✕
               </button>
             </div>
-            <p className="mt-1 text-sm text-white/60">More tokens, faster responses, premium support.</p>
+            <p className="mt-1 text-sm text-white/60">
+              More messages, faster responses, premium support.
+            </p>
 
-            <div className="mt-5 grid gap-3">
-              <div className="rounded-xl border border-white/10 bg-white/5 p-4 hover:bg-white/10 transition">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium">Pro</div>
-                    <div className="text-xs text-white/60">10,000 tokens/day</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-semibold">₹149/mo</div>
-                    <button
-                      className="mt-2 rounded-xl bg-gradient-to-r from-fuchsia-500 to-indigo-500 px-3 py-1.5 text-xs"
-                      onClick={() => handleCheckout("pro")}
-                    >
-                      Choose
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/10 p-4 hover:bg-fuchsia-500/15 transition">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium">Pro Max</div>
-                    <div className="text-xs text-white/70">66,000 tokens/day (2M/month)</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-semibold">₹399/mo</div>
-                    <button
-                      className="mt-2 rounded-xl bg-gradient-to-r from-fuchsia-500 to-indigo-500 px-3 py-1.5 text-xs"
-                      onClick={() => handleCheckout("pro_max")}
-                    >
-                      Choose
-                    </button>
-                  </div>
-                </div>
-              </div>
+            {/* cycle toggle */}
+            <div className="mt-4 flex gap-4">
+              {["monthly", "yearly"].map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setBillingCycle(c)}
+                  className={
+                    "px-3 py-1 rounded-lg text-sm " +
+                    (billingCycle === c
+                      ? "bg-white/10 text-white border border-white/20"
+                      : "text-white/70 hover:bg-white/5 border border-transparent")
+                  }
+                >
+                  {c === "monthly" ? "Monthly" : "Yearly (-2 mo)"}
+                </button>
+              ))}
             </div>
 
+            {/* plan cards */}
+            <div className="mt-5 grid gap-3">
+              {[
+                { keyBase: "pro",     title: "Pro",     colour: "white"   },
+                { keyBase: "promax",  title: "Pro Max", colour: "fuchsia" },
+              ].map(({ keyBase, title, colour }) => {
+                const planKey   = `${keyBase}_${billingCycle}`;        // pro_monthly, promax_yearly …
+                const meta      = keyBase === "pro"
+                  ? plans.pro[billingCycle]
+                  : plans.proMax[billingCycle];
+
+                if (!meta) return null;
+
+                const cardCls =
+                  colour === "fuchsia"
+                    ? "border-fuchsia-400/30 bg-fuchsia-500/10"
+                    : "border-white/10 bg-white/5";
+
+                return (
+                  <div key={planKey} className={`rounded-xl border p-4 hover:bg-white/10 transition ${cardCls}`}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-medium">{title}</div>
+                        <div className="text-xs text-white/60">
+                          {meta.messages.toLocaleString()} msgs / mo
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-semibold">
+                          ₹{meta.price.toLocaleString()} / {billingCycle === "monthly" ? "mo" : "yr"}
+                        </div>
+                        <button
+                          className="mt-2 rounded-xl bg-gradient-to-r from-fuchsia-500 to-indigo-500 px-3 py-1.5 text-xs"
+                          onClick={() => openCheckout(planKey)}
+                        >
+                          Choose
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* --- OPTIONAL ADD-ON -------------------------------------------------- */}
+            {billingCycle === "monthly" && (
+              <button
+                onClick={async () => {
+                  try {
+                    await axios.post(`${BASE_URL}/api/billing/buy-overage`, {
+                      userId: user.uid,
+                      blocks: 1,
+                    });
+                    alert("✅ Added 1 000 extra messages to this billing cycle.");
+                    setShowPricing(false);
+                  } catch {
+                    alert("❌ Could not add overage. Try again.");
+                  }
+                }}
+                className="mt-3 w-full rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-left hover:bg-emerald-500/20 transition"
+              >
+                <div className="flex items-center justify-between">
+                  <span>Add 1 000 extra messages</span>
+                  <span className="font-semibold">₹{plans.overage.per_1k}</span>
+                </div>
+              </button>
+            )}
+
             <p className="mt-4 text-center text-xs text-white/50">
-              You can cancel anytime. Upgrades apply instantly.
+              Cancel anytime. Billing recurs {billingCycle}.
             </p>
           </div>
         </div>

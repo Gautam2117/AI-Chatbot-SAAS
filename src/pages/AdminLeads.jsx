@@ -105,7 +105,10 @@ const AdminLeads = () => {
 
   const copy = async (text, label = "Copied") => {
     try {
-      await navigator.clipboard.writeText(text || "");
+      const MAX = 15_000_000; //  ~15 MB
+      const out = (text || "").slice(0, MAX);
+      await navigator.clipboard.writeText(out);
+      if (text.length > MAX) show("warn", "Copied (truncated)");
       show("success", `${label}!`);
     } catch {
       show("warn", "Copy failed");

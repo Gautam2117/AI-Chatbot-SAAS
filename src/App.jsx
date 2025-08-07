@@ -179,7 +179,8 @@ export function MainContent() {
       const usageRef = doc(db, "usage", user.uid);
       const snap = await getDoc(usageRef);
       if (!snap.exists()) {
-        await setDoc(usageRef, { tokensUsed: 0, lastReset: Timestamp.now() });
+        // legacy field renamed for clarity
+        await setDoc(usageRef, { messagesUsed: 0, lastReset: Timestamp.now() });
       }
     })();
   }, [loading, user]);
@@ -323,7 +324,7 @@ export function MainContent() {
                   Botify Dashboard
                 </h1>
                 <p className="text-sm text-white/55 -mt-0.5">
-                  Customize, embed, and test your AI assistant.
+                  Customize, embed, and test your AI chatbot.
                 </p>
               </div>
             </div>
@@ -344,7 +345,7 @@ export function MainContent() {
               </div>
 
               <Link
-                to="/pricing#pricing"
+                to="/pricing"
                 className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/90 hover:bg-white/10 transition"
               >
                 💎 Upgrade

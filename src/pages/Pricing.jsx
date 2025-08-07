@@ -3,7 +3,12 @@ import React from "react";
 import Layout from "../components/Layout";
 import { Link } from "react-router-dom";
 
+/* -------------------------------------------------------------------------- */
+/*  ✔  Figures and bullets here are the SINGLE SOURCE OF TRUTH for marketing  */
+/*  If you change a quota or price in the backend, nudge this file as well.   */
+/* -------------------------------------------------------------------------- */
 const plans = [
+  /* ────────── Free ────────── */
   {
     name: "Free",
     highlight: "Starter",
@@ -16,12 +21,14 @@ const plans = [
     period: "/month",
     cta: { label: "Start Free", to: "/signup" },
     features: [
-      "🎉 1,000 tokens / day",
-      "🔐 Secure data encryption",
+      "💬 150 messages / month",
+      "🔗 1 website • Botify branding",
       "📈 Basic analytics",
       "🛠️ Community support",
     ],
   },
+
+  /* ────────── Pro ────────── */
   {
     name: "Pro",
     highlight: "Most Popular",
@@ -30,17 +37,20 @@ const plans = [
     headerFrom: "from-fuchsia-600",
     headerTo: "to-indigo-700",
     pill: "bg-white/10 text-white border-white/10",
-    price: "₹149",
+    price: "₹6 499",
     period: "/month",
     cta: { label: "Go Pro", to: "/signup" },
     featured: true,
     features: [
-      "⚡ 10,000 tokens / day",
-      "📊 Usage dashboard",
-      "🔒 Enhanced security",
+      "🚀 3 000 messages / month",
+      "❌ Remove Botify branding",
+      "📥 Lead capture & email hand-off",
+      "🔌 Up to 3 integrations",
       "📞 Priority support",
     ],
   },
+
+  /* ────────── Pro Max ────────── */
   {
     name: "Pro Max",
     highlight: "Scale",
@@ -49,14 +59,15 @@ const plans = [
     headerFrom: "from-pink-600",
     headerTo: "to-violet-700",
     pill: "bg-white/10 text-white border-white/10",
-    price: "₹399",
+    price: "₹19 999",
     period: "/month",
     cta: { label: "Choose Pro Max", to: "/signup" },
     features: [
-      "🔥 66,000 tokens / day (~2M / month cap)",
+      "🔥 15 000 messages / month",
+      "🔌 All integrations + Workflows",
+      "🖼️ White-label (logo & CNAME)",
+      "📊 Advanced analytics",
       "💎 Premium support",
-      "👨‍💻 Priority onboarding",
-      "🧪 Early access features",
     ],
   },
 ];
@@ -64,7 +75,7 @@ const plans = [
 const Pricing = () => (
   <Layout
     title="Pricing – Botify AI Chatbot Plans"
-    description="Explore Botify's affordable AI chatbot pricing plans – Free, Pro, and Pro Max. Scale customer support with smart automation and flexible usage."
+    description="Transparent monthly pricing for Botify AI chatbots. Start free, upgrade to Pro or Pro Max when you’re ready for higher message volume and advanced features."
   >
     <section className="relative py-14 sm:py-20">
       {/* Ambient gradient glow */}
@@ -80,8 +91,8 @@ const Pricing = () => (
             Choose the plan that grows with you
           </h1>
           <p className="mx-auto mt-3 max-w-2xl text-white/80">
-            From idea to scale—Botify has a plan for every stage. Enjoy generous daily token limits,
-            secure infrastructure, and priority support when you need it.
+            Clear monthly message quotas, no hidden fees. Scale from your first
+            visitor to thousands of conversations seamlessly.
           </p>
         </div>
 
@@ -92,7 +103,9 @@ const Pricing = () => (
               key={p.name}
               className={[
                 "relative rounded-3xl p-[1.2px] transition-transform hover:-translate-y-1 hover:shadow-[0_20px_60px_rgba(0,0,0,0.35)]",
-                "bg-gradient-to-br", p.borderFrom, p.borderTo,
+                "bg-gradient-to-br",
+                p.borderFrom,
+                p.borderTo,
                 p.featured ? "scale-[1.02]" : "",
               ].join(" ")}
             >
@@ -118,7 +131,9 @@ const Pricing = () => (
                 <div
                   className={[
                     "mt-5 inline-flex rounded-2xl px-3 py-2 text-white font-extrabold",
-                    "bg-gradient-to-r", p.headerFrom, p.headerTo,
+                    "bg-gradient-to-r",
+                    p.headerFrom,
+                    p.headerTo,
                     "shadow-lg",
                   ].join(" ")}
                 >

@@ -113,7 +113,7 @@ export default function AdminDashboard() {
   const [companyFilter, setCompanyFilter] = useState("all");
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
-  const [sort, setSort] = useState({ field: "tokensUsed", dir: "desc" });
+  const [sort, setSort] = useState({ field: "messagesToday", dir: "desc" });
 
   const rowsPerPage = 10;
   const [page, setPage] = useState(1);
@@ -160,8 +160,15 @@ export default function AdminDashboard() {
             companyId: u.companyId || null,
             companyName: company?.name || "No Company",
             tier: company?.tier || "free", // free | pro | pro_max
-            tokensUsed: company?.tokensUsedToday || 0,
-            tokensUsedMonth: company?.tokensUsedMonth || 0,
+            /* ─── message counters (fallback to legacy token fields) ─── */
+            messagesToday:
+              company?.messagesUsedToday ??
+              company?.tokensUsedToday /* legacy */ ??
+              0,
+            messagesMonth:
+              company?.messagesUsedMonth ??
+              company?.tokensUsedMonth /* legacy */ ??
+              0,
             lastReset: company?.lastReset || null,
             subscriptionExpiresAt: company?.subscriptionExpiresAt || null,
           });
@@ -184,9 +191,9 @@ export default function AdminDashboard() {
   const kpis = useMemo(() => {
     const totalUsers = rows.length;
     const paidUsers = rows.filter((r) => r.tier && r.tier !== "free").length;
-    const tokensToday = rows.reduce((s, r) => s + (r.tokensUsed || 0), 0);
+    const messagesToday = rows.reduce((s, r) => s + (r.messagesToday || 0), 0);
     const companiesCount = new Set(rows.map((r) => r.companyId).filter(Boolean)).size;
-    return { totalUsers, paidUsers, tokensToday, companiesCount };
+    return { totalUsers, paidUsers, messagesToday, companiesCount };
   }, [rows]);
 
   // filtering + sorting
@@ -224,7 +231,8 @@ export default function AdminDashboard() {
           return ((a.tier || "")).localeCompare(b.tier || "") * dir;
         case "companyName":
           return (a.companyName || "").localeCompare(b.companyName || "") * dir;
-        case "tokensUsed":
+        case "messagesToday":
+          return ((a.messagesToday || 0) - (b.messagesToday || 0)) * dir;
         default:
           return ((a.tokensUsed || 0) - (b.tokensUsed || 0)) * dir;
       }
@@ -277,8 +285,8 @@ export default function AdminDashboard() {
       r.companyId === companyId
         ? {
             ...r,
-            tokensUsed: scope === "daily" ? 0 : r.tokensUsed,
-            tokensUsedMonth: scope === "monthly" ? 0 : r.tokensUsedMonth,
+            messagesToday: scope === "daily" ? 0 : r.messagesToday,
+            messagesMonth: scope === "monthly" ? 0 : r.messagesMonth,
             lastReset: scope === "daily" ? Timestamp.now() : r.lastReset,
           }
         : r
@@ -287,9 +295,9 @@ export default function AdminDashboard() {
 
     try {
       if (scope === "daily") {
-        await updateDoc(ref, { tokensUsedToday: 0, lastReset: Timestamp.now() });
+        await updateDoc(ref, { messagesUsedToday: 0, lastReset: Timestamp.now() });
       } else {
-        await updateDoc(ref, { tokensUsedMonth: 0, monthlyUsageReset: Timestamp.now() });
+        await updateDoc(ref, { messagesUsedMonth: 0, monthlyUsageReset: Timestamp.now() });
       }
       show("success", `Tokens reset (${scope}).`);
     } catch {
@@ -351,8 +359,8 @@ export default function AdminDashboard() {
         "Email",
         "Company",
         "Tier",
-        "Tokens Today",
-        "Tokens This Month",
+        "Messages Today",
+        "Messages This Month",
         "Last Reset",
         "Subscription Expires",
       ],
@@ -361,8 +369,8 @@ export default function AdminDashboard() {
         `"${(r.email || "").replace(/"/g, '""')}"`,
         `"${(r.companyName || "None").replace(/"/g, '""')}"`,
         r.tier,
-        r.tokensUsed || 0,
-        r.tokensUsedMonth || 0,
+        r.messagesToday || 0,
+        r.messagesMonth || 0,
         r.lastReset?.toDate?.().toISOString?.().slice(0, 19).replace("T", " ") || "N/A",
         r.subscriptionExpiresAt?.toDate?.()?.toISOString?.().slice(0, 19).replace("T", " ") ||
           "N/A",
@@ -390,8 +398,8 @@ export default function AdminDashboard() {
           "Email",
           "Company",
           "Tier",
-          "Tokens Today",
-          "Tokens Month",
+          "Messages Today",
+          "Messages Month",
           "Last Reset",
           "Sub Expires",
         ],
@@ -401,8 +409,8 @@ export default function AdminDashboard() {
         r.email,
         r.companyName || "None",
         r.tier,
-        String(r.tokensUsed || 0),
-        String(r.tokensUsedMonth || 0),
+        String(r.messagesToday || 0),
+        String(r.messagesMonth || 0),
         r.lastReset?.toDate?.().toLocaleString?.() || "N/A",
         r.subscriptionExpiresAt?.toDate?.()?.toLocaleString?.() || "N/A",
       ]),
@@ -461,7 +469,7 @@ export default function AdminDashboard() {
           {[
             { label: "Total Users", value: kpis.totalUsers },
             { label: "Paid Users", value: kpis.paidUsers },
-            { label: "Tokens Today", value: kpis.tokensToday },
+            { label: "Messages Today", value: kpis.messagesToday },
             { label: "Companies", value: kpis.companiesCount },
           ].map((k) => (
             <div key={k.label} className="rounded-2xl p-[1.2px] bg-gradient-to-br from-fuchsia-400/60 to-indigo-400/60">
@@ -572,7 +580,7 @@ export default function AdminDashboard() {
 
         {/* Chart */}
         <div className="mt-6 rounded-2xl border border-indigo-100 bg-white p-4 z-10 relative">
-          <h2 className="text-lg font-bold text-indigo-900 mb-2">📊 Token Usage (Today)</h2>
+          <h2 className="text-lg font-bold text-indigo-900 mb-2">📊 Messages Today</h2>
           <div className="h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
@@ -583,7 +591,7 @@ export default function AdminDashboard() {
                 <XAxis dataKey="email" interval={0} angle={-25} textAnchor="end" height={70} />
                 <YAxis />
                 <Tooltip />
-                <Bar dataKey="tokensUsed" fill="#7C3AED" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="messagesToday" fill="#7C3AED" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -608,9 +616,9 @@ export default function AdminDashboard() {
                     <SortBtn field="tier">Plan</SortBtn>
                   </th>
                   <th className="px-4 py-3 text-left">
-                    <SortBtn field="tokensUsed">Tokens Today</SortBtn>
+                    <SortBtn field="messagesToday">Msgs Today</SortBtn>
                   </th>
-                  <th className="px-4 py-3 text-left">Tokens Month</th>
+                  <th className="px-4 py-3 text-left">Msgs Month</th>
                   <th className="px-4 py-3 text-left">Last Reset</th>
                   <th className="px-4 py-3 text-left">Sub Expires</th>
                   <th className="px-4 py-3 text-left">Actions</th>
@@ -644,7 +652,7 @@ export default function AdminDashboard() {
                       <tr
                         key={r.userId}
                         className={`border-t ${
-                          (r.tokensUsed || 0) > 1000 ? "bg-yellow-50/60" : ""
+                          (r.messagesToday || 0) > 1000 ? "bg-yellow-50/60" : ""
                         }`}
                       >
                         <td className="px-4 py-2 font-mono text-[11px] text-gray-600">
@@ -682,8 +690,8 @@ export default function AdminDashboard() {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-2">{r.tokensUsed || 0}</td>
-                        <td className="px-4 py-2">{r.tokensUsedMonth || 0}</td>
+                        <td className="px-4 py-2">{r.messagesToday || 0}</td>
+                        <td className="px-4 py-2">{r.messagesMonth || 0}</td>
                         <td className="px-4 py-2">
                           {r.lastReset?.toDate?.()?.toLocaleString?.() || "N/A"}
                         </td>

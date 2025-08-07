@@ -62,8 +62,8 @@ export default function Signup() {
       const companyRef = await addDoc(collection(db, "companies"), {
         name: email.split("@")[0] + "'s Company",
         tier: "free",
-        tokensUsedToday: 0,
-        tokensUsedMonth: 0,
+        messagesUsedToday: 0,
+        messagesUsedMonth: 0,
         lastReset: Timestamp.now(),
         createdBy: user.uid,
         status: "pending",

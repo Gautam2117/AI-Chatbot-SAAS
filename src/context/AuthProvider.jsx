@@ -57,8 +57,8 @@ export const AuthProvider = ({ children }) => {
               (firebaseUser.displayName ||
                 firebaseUser.email.split("@")[0]) + "'s Company",
             tier: "free",
-            tokensUsedToday: 0,
-            tokensUsedMonth: 0,
+            messagesUsedToday: 0,
+            messagesUsedMonth: 0,
             lastReset: Timestamp.now(),
             createdBy: firebaseUser.uid,
             status: "pending",

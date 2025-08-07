@@ -211,7 +211,13 @@
     const h = Math.max(field.scrollHeight || 0, MIN);
     field.style.height = Math.min(h, MAX) + "px";
   }
-  function updateSendState(){ sendBtn.disabled = !(field.value.trim()); }
+  const MAX_INPUT = 2000;
+  function updateSendState(){
+    if (field.value.length > MAX_INPUT){
+      field.value = field.value.slice(0, MAX_INPUT);
+    }
+    sendBtn.disabled = !(field.value.trim());
+  }
 
   var unread = Number(load("unread","0")); setUnread(unread);
 
@@ -373,7 +379,8 @@
     }catch(e){ return []; }
   }
   function saveHistory(list){
-    try{ localStorage.setItem(storageKey, JSON.stringify(list.slice(-80))); }catch(e){}
+    try{ localStorage.setItem(storageKey, JSON.stringify(list.slice(-80))); }
+    catch(e){ /* Safari-private or quota exceeded – silently ignore */ }
   }
   var history = loadHistory();
 
@@ -439,7 +446,15 @@
     recog.interimResults = false; 
     recog.maxAlternatives = 1;
     micBtn.addEventListener("click", function(){ try{ recog.start(); }catch(e){} });
-    recog.onresult = function(e){ field.value += (e.results[0][0].transcript || "") + " "; field.focus(); autogrow(); updateSendState(); };
+    recog.onresult = function(e){
+      field.value += (e.results[0][0].transcript || "") + " ";
+      field.focus(); autogrow(); updateSendState();
+    };
+    recog.onerror = function(err){
+      if (err.error === "not-allowed"){
+        micBtn.title = "🎤 Microphone blocked by browser";
+      }
+    };
   }
 
   // scroll-to-bottom visibility
@@ -478,7 +493,14 @@
     header.addEventListener("mousedown", onDown);
   }
 
-  window.addEventListener("resize", function(){ msgs.scrollTop = msgs.scrollHeight; });
+  window.addEventListener("resize", function(){
+    msgs.scrollTop = msgs.scrollHeight;
+    // keep widget visible after viewport shrink
+    const r = wrap.getBoundingClientRect();
+    const snap = 16;
+    if (r.right < snap)   wrap.style.left = (window.innerWidth - r.width - snap) + "px";
+    if (r.bottom < snap)  wrap.style.top  = (window.innerHeight - r.height - snap) + "px";
+  });
 
   /* ------------------ Networking helpers ------------------ */
   function fetchWithTimeout(url, opts, ms){
@@ -491,6 +513,15 @@
 
   /* ------------------ Messaging ------------------ */
   var currentChatController = null;
+
+  // ─── clean up any live request when the tab becomes hidden or the page unloads ──
+  function abortChat(){
+    if (currentChatController){ try{ currentChatController.abort(); }catch(e){} }
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) abortChat();
+  });
+  window.addEventListener("beforeunload", abortChat);  
 
   function pushHistory(role, text){
     history.push({ role: role, text: text, ts: Date.now() });
@@ -526,13 +557,25 @@
         signal: currentChatController.signal
       }).then(function(res){
         if(res.status === 403){
-          typing.remove(); setOnline(false);
-          var msgHtml = "<strong>We’re currently unavailable</strong><br>The team reached its daily usage limit. Please try again later.";
-          pushHistory("bot", msgHtml.replace(/<[^>]+>/g,""));
-          var b = appendRow("bot", msgHtml, new Date());
-          copyable(b);
-          disable(true);
-          currentChatController = null;
+          // typing.remove(); setOnline(false);
+          // var msgHtml = "<strong>We’re currently unavailable</strong><br>The team reached its daily usage limit. Please try again later.";
+          // pushHistory("bot", msgHtml.replace(/<[^>]+>/g,""));
+          // var b = appendRow("bot", msgHtml, new Date());
+          // copyable(b);
+          // disable(true);
+          // currentChatController = null;
+          // return null;
+          typing.remove();
+          res.json().then(function(payload){
+            var msg = (payload && payload.error) ||
+                      "Monthly message limit reached. Please upgrade to continue.";
+            var html = "<strong>Limit reached</strong><br>"+escapeHTML(msg);
+            pushHistory("bot", msg);
+            var b = appendRow("bot", html, new Date());
+            copyable(b);
+            disable(true); // lock input until next cycle
+            currentChatController = null;
+          });
           return null;
         }
         setOnline(true);
