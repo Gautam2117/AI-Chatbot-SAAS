@@ -422,24 +422,46 @@ const ChatTester = () => {
                     ? "border-indigo-400/30 bg-indigo-500/10"
                     : "border-white/10 bg-white/5";
 
+                const currentPlanKey = `${tier}_${billingCycle}`;
+
                 return (
-                  <div key={planKey} className={`rounded-xl border p-4 hover:bg-white/10 transition ${cardCls}`}>
+                  <div
+                    key={planKey}
+                    className={`
+                      rounded-xl border p-4 transition
+                      ${cardCls}
+                      ${planKey === currentPlanKey
+                        ? 'opacity-50 cursor-not-allowed'   /* grey-out current plan */
+                        : 'hover:bg-white/10'}
+                    `}
+                  >
                     <div className="flex items-center justify-between">
+                      {/* plan title & quota */}
                       <div>
                         <div className="font-medium">{title}</div>
                         <div className="text-xs text-white/60">
                           {meta.messages.toLocaleString()} msgs / mo
                         </div>
                       </div>
+
+                      {/* price + action */}
                       <div className="text-right">
                         <div className="font-semibold">
-                          ₹{meta.price.toLocaleString()} / {billingCycle === "monthly" ? "mo" : "yr"}
+                          ₹{meta.price.toLocaleString()} / {billingCycle === 'monthly' ? 'mo' : 'yr'}
                         </div>
+
+                        {/* “Choose” button or disabled “Current plan” label */}
                         <button
-                          className="mt-2 rounded-xl bg-gradient-to-r from-fuchsia-500 to-indigo-500 px-3 py-1.5 text-xs"
-                          onClick={() => openCheckout(planKey)}
+                          disabled={planKey === currentPlanKey}
+                          onClick={() => planKey !== currentPlanKey && openCheckout(planKey)}
+                          className={`
+                            mt-2 rounded-xl px-3 py-1.5 text-xs
+                            ${planKey === currentPlanKey
+                              ? 'bg-white/20 text-white/60 cursor-not-allowed'
+                              : 'bg-gradient-to-r from-fuchsia-500 to-indigo-500 hover:from-fuchsia-400 hover:to-indigo-400'}
+                          `}
                         >
-                          Choose
+                          {planKey === currentPlanKey ? 'Current plan' : 'Choose'}
                         </button>
                       </div>
                     </div>
