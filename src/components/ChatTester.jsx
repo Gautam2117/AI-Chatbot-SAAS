@@ -1,5 +1,5 @@
 // src/components/ChatTester.jsx
-import React, { useContext, useState, useEffect, useMemo } from "react";
+import React, { useContext, useState, useEffect, useMemo, useRef } from "react";
 import { AuthContext } from "../context/AuthProvider";
 import { db } from "../firebase";
 import {
@@ -42,10 +42,12 @@ const IconButton = ({ onClick, children, title, disabled }) => (
   </button>
 );
 
+
 /* ─────────────────────────────── Component ──────────────────────────────── */
 const ChatTester = () => {
   const { user } = useContext(AuthContext);
   const navigate   = useNavigate();
+  const abortRef = useRef(null);
 
   /* Backend base URL */
   const BASE_URL =
@@ -167,11 +169,14 @@ const ChatTester = () => {
     setLoading(true); pushUser(userQ);
     const q = userQ; setUserQ("");
 
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
       const res = await fetch(`${BASE_URL}/api/chat`, {
         method:  "POST",
         headers: { "Content-Type": "application/json", "x-user-id": user.uid },
         body:    JSON.stringify({ question: q, faqs }),
+        signal:  controller.signal,
       });
 
       if (!res.ok) {
@@ -191,8 +196,17 @@ const ChatTester = () => {
     } catch (e) {
       console.error(e);
       pushAssistant("❌ Failed to fetch response");
-    } finally { setLoading(false); }
+    } finally { 
+      setLoading(false);
+      abortRef.current = null;
+     }
   };
+
+  /* -------- ABORT on unmount -------- */
+  useEffect(() => {
+    // abort the *last* running request (if any) when ChatTester unmounts
+    return () => abortRef.current?.abort?.();
+  }, []);
 
   /* ─────────── checkout (uses /api/billing/subscribe) ─────────── */
   const openCheckout = async (planKey) => {
@@ -220,6 +234,14 @@ const ChatTester = () => {
         });
         rzp.open();
       };
+
+      const existingScript = document.querySelector(
+        'script[src*="checkout.razorpay.com"]'
+      );
+      if (existingScript && window.Razorpay) {
+        launch();                           // already loaded
+        return;
+      }
 
       if (!window.Razorpay) {
         const s = document.createElement("script");
