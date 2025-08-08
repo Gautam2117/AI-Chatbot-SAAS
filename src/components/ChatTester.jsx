@@ -451,7 +451,10 @@ const ChatTester = () => {
             {/* add-on */}
             {billingCycle === "monthly" && (
               <button
+              /* block free-tier users & people already over quota */
+              disabled={tier === "free" || overLimit}
                 onClick={async () => {
+                  if (tier === "free") return;          // safety-net – shouldn’t fire anyway
                   try {
                     await axios.post(`${BASE_URL}/api/billing/buy-overage`, {
                       userId: user.uid,
@@ -463,7 +466,12 @@ const ChatTester = () => {
                     alert("❌ Could not add overage. Try again.");
                   }
                 }}
-                className="mt-3 w-full rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-left hover:bg-emerald-500/20 transition"
+                className={
+                  "mt-3 w-full rounded-xl border border-emerald-400/30 p-4 text-left transition " +
+                  (tier === "free" || overLimit
+                    ? "bg-white/10 opacity-50 cursor-not-allowed"
+                    : "bg-emerald-500/10 hover:bg-emerald-500/20")
+                }
               >
                 <div className="flex items-center justify-between">
                   <span>Add 1 000 extra messages</span>
