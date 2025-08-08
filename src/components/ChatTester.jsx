@@ -109,7 +109,7 @@ const ChatTester = () => {
         setMessagesUsed(d.messagesUsedMonth || 0);
 
         /* tier & caps */
-        const curTier = (d.tier || "free").replace(/_.*$/, "").toLowerCase().trim();
+        const curTier = (d.tier || "free").toLowerCase().trim();
         setTier(curTier);
         const caps = { free: 150, starter: 3000, growth: 15000, scale: 50000 };
         setMonthlyLimit(caps[curTier] ?? 150);
