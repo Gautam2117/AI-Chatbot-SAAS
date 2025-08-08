@@ -109,7 +109,7 @@ export default function AdminDashboard() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [onlyPaid, setOnlyPaid] = useState(false);
-  const [tierFilter, setTierFilter] = useState("all"); // free | pro | pro_max | all
+  const [tierFilter, setTierFilter] = useState("all"); // free | starter | growth | scale | all
   const [companyFilter, setCompanyFilter] = useState("all");
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
@@ -497,18 +497,12 @@ export default function AdminDashboard() {
               </div>
 
               <div className="flex gap-2">
-                <Chip active={tierFilter === "all"} onClick={() => setTierFilter("all")}>
-                  All
-                </Chip>
-                <Chip active={tierFilter === "free"} onClick={() => setTierFilter("free")}>
-                  Free
-                </Chip>
-                <Chip active={tierFilter === "pro"} onClick={() => setTierFilter("pro")}>
-                  Pro
-                </Chip>
-                <Chip active={tierFilter === "pro_max"} onClick={() => setTierFilter("pro_max")}>
-                  Pro Max
-                </Chip>
+                {/* replace the whole “chip” block */}
+                <Chip active={tierFilter === "all"}     onClick={() => setTierFilter("all")}>All</Chip>
+                <Chip active={tierFilter === "free"}    onClick={() => setTierFilter("free")}>Free</Chip>
+                <Chip active={tierFilter === "starter"} onClick={() => setTierFilter("starter")}>Starter</Chip>
+                <Chip active={tierFilter === "growth"}  onClick={() => setTierFilter("growth")}>Growth</Chip>
+                <Chip active={tierFilter === "scale"}   onClick={() => setTierFilter("scale")}>Scale</Chip>
               </div>
 
               <select
@@ -662,15 +656,16 @@ export default function AdminDashboard() {
                         <td className="px-4 py-2">{r.companyName}</td>
                         <td className="px-4 py-2">
                           <div className="flex items-center gap-2">
-                            <Badge
-                              tone={
-                                r.tier === "pro_max"
-                                  ? "purple"
-                                  : r.tier === "pro"
-                                  ? "green"
-                                  : "gray"
-                              }
-                            >
+                            <Badge tone={
+                              r.tier === "scale"
+                                ? "purple"          // 📈  pick any colour you like
+                                : r.tier === "growth"
+                                ? "green"
+                                : r.tier === "starter"
+                                ? "emerald"
+                                : "gray"
+                            }>
+
                               {r.tier === "pro_max"
                                 ? "Pro Max"
                                 : r.tier.charAt(0).toUpperCase() + r.tier.slice(1)}
@@ -684,8 +679,9 @@ export default function AdminDashboard() {
                                 className="border rounded-full px-2 py-1 focus:ring-1 focus:ring-indigo-400 text-xs"
                               >
                                 <option value="free">Free</option>
-                                <option value="pro">Pro</option>
-                                <option value="pro_max">Pro Max</option>
+                                <option value="starter">Starter</option>
+                                <option value="growth">Growth</option>
+                                <option value="scale">Scale</option>
                               </select>
                             )}
                           </div>

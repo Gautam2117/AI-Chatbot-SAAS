@@ -61,7 +61,7 @@ const ChatTester = () => {
   const [loading,       setLoading]       = useState(false);
 
   /* company workspace we attach the subscription to */
-  const [companyId,     setCompanyId]     = useState(null); // ← NEW
+  const [companyId,     setCompanyId]     = useState(null);
 
   /* usage / quota */
   const [messagesUsed,  setMessagesUsed]  = useState(0);
@@ -106,13 +106,12 @@ const ChatTester = () => {
         const d = snap.data() || {};
 
         /* monthly counter */
-        const used = d.messagesUsedMonth || 0;
-        setMessagesUsed(used);
+        setMessagesUsed(d.messagesUsedMonth || 0);
 
         /* tier & caps */
-        const curTier       = d.tier || "free";
+        const curTier = d.tier || "free";
         setTier(curTier);
-        const caps          = { free: 150, pro: 3000, pro_max: 15000 };
+        const caps = { free: 150, starter: 3000, growth: 15000, scale: 50000 };
         setMonthlyLimit(caps[curTier] ?? 150);
 
         /* expiry warning */
@@ -134,9 +133,7 @@ const ChatTester = () => {
       );
     })();
 
-    return () => {
-      unsubUsage?.(); unsubFaqs?.();
-    };
+    return () => { unsubUsage?.(); unsubFaqs?.(); };
   }, [user?.uid]);
 
   /* ─────────── derived values ─────────── */
@@ -151,8 +148,9 @@ const ChatTester = () => {
   useEffect(() => { if (nearLimit || overLimit) setShowPricing(true); }, [nearLimit, overLimit]);
 
   /* ─────────── chat helpers ─────────── */
-  const pushUser      = (txt)  => setMessages((m) => [...m, { role: "user",      content: txt }]);
-  const pushAssistant = (txt)  =>
+  const pushUser      = (txt) =>
+    setMessages((m) => [...m, { role: "user",      content: txt }]);
+  const pushAssistant = (txt) =>
     setMessages((m) => {
       const clone = [...m];
       if (!clone.length || clone[clone.length - 1].role !== "assistant")
@@ -163,17 +161,17 @@ const ChatTester = () => {
 
   /* ─────────── send question ─────────── */
   const ask = async () => {
-    if (!user?.uid)                   return alert("🔒 Please log in.");
-    if (!userQ.trim() || overLimit)   return;
+    if (!user?.uid)                 return alert("🔒 Please log in.");
+    if (!userQ.trim() || overLimit) return;
 
     setLoading(true); pushUser(userQ);
     const q = userQ; setUserQ("");
 
     try {
       const res = await fetch(`${BASE_URL}/api/chat`, {
-        method: "POST",
+        method:  "POST",
         headers: { "Content-Type": "application/json", "x-user-id": user.uid },
-        body: JSON.stringify({ question: q, faqs }),
+        body:    JSON.stringify({ question: q, faqs }),
       });
 
       if (!res.ok) {
@@ -193,12 +191,10 @@ const ChatTester = () => {
     } catch (e) {
       console.error(e);
       pushAssistant("❌ Failed to fetch response");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
-  /* ─────────── checkout (flow uses /api/billing/subscribe) ─────────── */
+  /* ─────────── checkout (uses /api/billing/subscribe) ─────────── */
   const openCheckout = async (planKey) => {
     if (!user?.uid) return alert("🔒 Please log in.");
 
@@ -206,19 +202,20 @@ const ChatTester = () => {
       const { data } = await axios.post(`${BASE_URL}/api/billing/subscribe`, {
         planKey,
         userId:   user.uid,
-        companyId,                                 // 👈 now supplied
+        companyId,
         customer: { name: user.displayName, email: user.email },
       });
 
       const launch = () => {
         const rzp = new window.Razorpay({
-          key: data.checkout.key,
-          subscription_id: data.checkout.subscription_id,
-          customer_id:     data.checkout.customer_id,
-          notes:           data.checkout.notes,
-          theme: { color: "#6d28d9" },
+          key:            data.checkout.key,
+          subscription_id:data.checkout.subscription_id,
+          customer_id:    data.checkout.customer_id,
+          notes:          data.checkout.notes,
+          theme:          { color: "#6d28d9" },
           handler: () => {
-            alert("✅ Subscription started!"); setShowPricing(false);
+            alert("✅ Subscription started!");
+            setShowPricing(false);
           },
         });
         rzp.open();
@@ -226,8 +223,9 @@ const ChatTester = () => {
 
       if (!window.Razorpay) {
         const s = document.createElement("script");
-        s.src = "https://checkout.razorpay.com/v1/checkout.js";
-        s.onload = launch; s.onerror = () => alert("❌ Unable to load Razorpay");
+        s.src   = "https://checkout.razorpay.com/v1/checkout.js";
+        s.onload= launch;
+        s.onerror= () => alert("❌ Unable to load Razorpay");
         document.body.appendChild(s);
       } else launch();
     } catch (e) {
@@ -238,13 +236,17 @@ const ChatTester = () => {
   };
 
   /* ─────────── clipboard / reset ─────────── */
-  const copyLast = async () => {
+  const copyLast  = async () => {
     const last = [...messages].reverse().find((m) => m.role === "assistant");
     if (last?.content) try { await navigator.clipboard.writeText(last.content); } catch {}
   };
   const clearChat = () => setMessages([]);
 
   /* ─────────────────────────────── render ─────────────────────────────── */
+  const displayTier = tier === "free"
+    ? "Free"
+    : tier.charAt(0).toUpperCase() + tier.slice(1);
+
   return (
     <GlassCard className="p-6 md:p-8 text-white/90">
       {/* Header */}
@@ -252,9 +254,7 @@ const ChatTester = () => {
         <h2 className="text-2xl md:text-3xl font-semibold">🤖 Test your assistant</h2>
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center rounded-full px-3 py-1 text-xs border border-white/10 bg-white/5">
-            Plan:&nbsp;<strong className="ml-1">
-              {tier === "pro_max" ? "Pro Max" : tier.charAt(0).toUpperCase() + tier.slice(1)}
-            </strong>
+            Plan:&nbsp;<strong className="ml-1">{displayTier}</strong>
           </span>
           <span className="inline-flex items-center rounded-full px-3 py-1 text-xs border border-emerald-400/20 bg-emerald-400/10 text-emerald-200">
             📈 {messagesUsed}/{monthlyLimit} msgs
@@ -401,19 +401,25 @@ const ChatTester = () => {
             {/* plan cards */}
             <div className="mt-5 grid gap-3">
               {[
-                { keyBase: "pro",     title: "Pro",     colour: "white"   },
-                { keyBase: "promax",  title: "Pro Max", colour: "fuchsia" },
+                { keyBase: "starter", title: "Starter", colour: "white"   },
+                { keyBase: "growth",  title: "Growth",  colour: "fuchsia" },
+                { keyBase: "scale",   title: "Scale",   colour: "indigo"  },
               ].map(({ keyBase, title, colour }) => {
-                const planKey   = `${keyBase}_${billingCycle}`;        // pro_monthly, promax_yearly …
-                const meta      = keyBase === "pro"
-                  ? plans.pro[billingCycle]
-                  : plans.proMax[billingCycle];
+                const planKey = `${keyBase}_${billingCycle}`; // starter_monthly, growth_yearly …
+                const meta =
+                  keyBase === "starter"
+                    ? plans.starter[billingCycle]
+                    : keyBase === "growth"
+                    ? plans.growth[billingCycle]
+                    : plans.scale[billingCycle];
 
                 if (!meta) return null;
 
                 const cardCls =
                   colour === "fuchsia"
                     ? "border-fuchsia-400/30 bg-fuchsia-500/10"
+                    : colour === "indigo"
+                    ? "border-indigo-400/30 bg-indigo-500/10"
                     : "border-white/10 bg-white/5";
 
                 return (
@@ -442,7 +448,7 @@ const ChatTester = () => {
               })}
             </div>
 
-            {/* --- OPTIONAL ADD-ON -------------------------------------------------- */}
+            {/* add-on */}
             {billingCycle === "monthly" && (
               <button
                 onClick={async () => {
