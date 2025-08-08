@@ -62,6 +62,7 @@ export const AuthProvider = ({ children }) => {
             lastReset: Timestamp.now(),
             createdBy: firebaseUser.uid,
             status: "pending",
+            overageCredits: 0,
           });
 
           userData = {
@@ -70,6 +71,7 @@ export const AuthProvider = ({ children }) => {
             tier: "free",
             companyId: companyRef.id,
             active: false,
+            overageCredits: 0,
             createdAt: Timestamp.now(),
           };
           await setDoc(userRef, userData);

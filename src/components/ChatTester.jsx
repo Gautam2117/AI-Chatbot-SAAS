@@ -14,6 +14,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import { TypeAnimation } from "react-type-animation";
+import dedupe from "../utils/dedupe.js";
 
 /* ───────────────────────────────── UI atoms ──────────────────────────────── */
 const GlassCard = ({ children, className = "" }) => (
@@ -46,7 +47,7 @@ const IconButton = ({ onClick, children, title, disabled }) => (
 /* ─────────────────────────────── Component ──────────────────────────────── */
 const ChatTester = () => {
   const { user } = useContext(AuthContext);
-  const navigate   = useNavigate();
+  console.log(user.overageCredits);
   const abortRef = useRef(null);
 
   /* Backend base URL */
@@ -170,7 +171,11 @@ const ChatTester = () => {
   /* ─────────── send question ─────────── */
   const ask = async () => {
     if (!user?.uid)                 return alert("🔒 Please log in.");
-    if (!userQ.trim() || overLimit) return;
+    if (overLimit) return;
+    if (!userQ.trim()) {
+      alert("Please type a question.");       // gentle prod
+      return;
+    }
 
     setLoading(true); pushUser(userQ);
     const q = userQ; setUserQ("");
@@ -201,10 +206,23 @@ const ChatTester = () => {
       }
     } catch (e) {
       console.error(e);
+      if (e.name === "AbortError") return;
+      console.error(e);
       pushAssistant("❌ Failed to fetch response");
     } finally { 
       setLoading(false);
       abortRef.current = null;
+
+      setMessages((prev) => {
+        const clone = [...prev];
+        const last  = clone.at(-1);
+        if (last?.role === "assistant") {
+          /* collapse ANY immediate duplication, e.g.
+             “is called is called”, “the8seconds the8seconds”, “foo foo.” */
+          last.content = dedupe(last.content);
+        }
+        return clone;
+      });
      }
   };
 
@@ -264,6 +282,34 @@ const ChatTester = () => {
     }
   };
 
+  // inside ChatTester, after openCheckout…
+  const buyOverage = async () => {
+    if (!user?.uid) return alert("🔒 Please log in.");
+    try {
+      // 1️⃣ create an order on your backend
+      const { data } = await axios.post(
+        `${BASE_URL}/api/billing/create-overage-order`,
+        { userId: user.uid, blocks: 1 }
+      );
+      // 2️⃣ launch Razorpay checkout with that order
+      const options = {
+        key:         data.key,
+        amount:      data.amount,
+        currency:    data.currency,
+        order_id:    data.orderId,
+        handler: () => {
+          alert("✅ You’ve successfully purchased 1 000 extra messages!");
+          setShowPricing(false);
+        },
+      };
+      const rzp = new window.Razorpay(options);
+      rzp.open();
+    } catch (e) {
+      console.error("Overage checkout failed:", e);
+      alert("❌ Could not start overage checkout.");
+    }
+  };
+
   /* ─────────── clipboard / reset ─────────── */
   const copyLast  = async () => {
     const last = [...messages].reverse().find((m) => m.role === "assistant");
@@ -319,13 +365,14 @@ const ChatTester = () => {
                 }
               >
                 <div className="text-xs mb-1 opacity-60">{m.role === "user" ? "You" : "Botify"}</div>
-                <ReactMarkdown
-                  className="prose prose-invert prose-sm max-w-none"
-                  remarkPlugins={[remarkGfm]}
-                  rehypePlugins={[rehypeSanitize]}
-                >
-                  {m.content}
-                </ReactMarkdown>
+                <div className="prose prose-invert prose-sm max-w-none">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeSanitize]}
+                  >
+                    {m.content}
+                  </ReactMarkdown>
+                </div>
               </div>
             ))}
 
@@ -506,31 +553,48 @@ const ChatTester = () => {
             {/* add-on */}
             {billingCycle === "monthly" && (
               <button
-              /* block free-tier users & people already over quota */
-               disabled={
-                 tier === "free"    // free users can’t buy overage
-                 || overLimit       // already over quota
-                 || subStatus !== "active"  // must be fully paid
-               }
+                /* block free-tier users, people over quota, or non-active subs */
+                disabled={
+                  tier === "free" ||
+                  overLimit ||
+                  subStatus !== "active"
+                }
                 onClick={async () => {
-                  if (tier === "free") return;          // safety-net – shouldn’t fire anyway
+                  // safety-net
+                  if (tier === "free" || overLimit || subStatus !== "active") return;
+
                   try {
-                    await axios.post(`${BASE_URL}/api/billing/buy-overage`, {
-                      userId: user.uid,
-                      blocks: 1,
-                    });
-                    alert("✅ Added 1 000 extra messages to this billing cycle.");
-                    setShowPricing(false);
-                  } catch {
-                    alert("❌ Could not add overage. Try again.");
+                    // 1️⃣ create an overage order
+                    const { data } = await axios.post(
+                      `${BASE_URL}/api/billing/create-overage-order`,
+                      { userId: user.uid, blocks: 1 }
+                    );
+
+                    // 2️⃣ launch Razorpay checkout
+                    const options = {
+                      key:       data.key,
+                      amount:    data.amount,
+                      currency:  data.currency,
+                      order_id:  data.orderId,
+                      handler: () => {
+                        alert("✅ You’ve successfully purchased 1 000 extra messages!");
+                        setShowPricing(false);
+                      },
+                    };
+                    const rzp = new window.Razorpay(options);
+                    rzp.open();
+                  } catch (e) {
+                    console.error("Overage checkout error:", e);
+                    alert("❌ Could not initiate overage purchase. Try again.");
                   }
                 }}
-                className={
-                  "mt-3 w-full rounded-xl border border-emerald-400/30 p-4 text-left transition " +
-                  (tier === "free" || overLimit
+                className={`
+                  mt-3 w-full rounded-xl border border-emerald-400/30 p-4 text-left transition
+                  ${(tier === "free" || overLimit || subStatus !== "active")
                     ? "bg-white/10 opacity-50 cursor-not-allowed"
-                    : "bg-emerald-500/10 hover:bg-emerald-500/20")
-                }
+                    : "bg-emerald-500/10 hover:bg-emerald-500/20"
+                  }
+                `}
               >
                 <div className="flex items-center justify-between">
                   <span>Add 1 000 extra messages</span>

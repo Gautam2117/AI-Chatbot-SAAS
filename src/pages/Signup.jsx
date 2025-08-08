@@ -67,6 +67,7 @@ export default function Signup() {
         lastReset: Timestamp.now(),
         createdBy: user.uid,
         status: "pending",
+        overageCredits: 0,
       });
 
       await setDoc(doc(db, "users", user.uid), {
