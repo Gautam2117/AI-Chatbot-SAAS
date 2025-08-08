@@ -76,6 +76,8 @@ const ChatTester = () => {
   const [billingCycle,  setBillingCycle]  = useState("monthly"); // or "yearly"
   const [plans,         setPlans]         = useState(null);      // fetched catalogue
 
+  const [subStatus, setSubStatus] = useState(null);
+
   /* ─────────── fetch plan catalogue once ─────────── */
   useEffect(() => {
     let ignore = false;
@@ -116,6 +118,8 @@ const ChatTester = () => {
         const caps = { free: 150, starter: 3000, growth: 15000, scale: 50000 };
         setMonthlyLimit(caps[curTier] ?? 150);
 
+        setSubStatus(d.subscriptionStatus || null);
+
         /* expiry warning */
         const end = d.currentPeriodEnd?.toDate?.();
         if (end) {
@@ -144,7 +148,9 @@ const ChatTester = () => {
     [messagesUsed, monthlyLimit]
   );
   const nearLimit = percentUsed >= 80 && percentUsed < 100;
+  const pending   = subStatus === "created";
   const overLimit = messagesUsed >= monthlyLimit;
+  const blocked   = pending || overLimit;
 
   /* auto-open pricing when quota tight */
   useEffect(() => { if (nearLimit || overLimit) setShowPricing(true); }, [nearLimit, overLimit]);
@@ -224,6 +230,7 @@ const ChatTester = () => {
         const rzp = new window.Razorpay({
           key:            data.checkout.key,
           subscription_id:data.checkout.subscription_id,
+          analytics: false,
           customer_id:    data.checkout.customer_id,
           notes:          data.checkout.notes,
           theme:          { color: "#6d28d9" },
@@ -265,10 +272,9 @@ const ChatTester = () => {
   const clearChat = () => setMessages([]);
 
   /* ─────────────────────────────── render ─────────────────────────────── */
-  const displayTier = tier === "free"
-    ? "Free"
-    : tier.charAt(0).toUpperCase() + tier.slice(1);
-
+  const displayTier = pending ? "Pending…" :
+                      tier === "free" ? "Free" :
+                      tier[0].toUpperCase()+tier.slice(1);
   return (
     <GlassCard className="p-6 md:p-8 text-white/90">
       {/* Header */}
@@ -343,7 +349,7 @@ const ChatTester = () => {
             value={userQ}
             onChange={(e) => setUserQ(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && ask()}
-            disabled={overLimit || loading}
+            disabled={blocked || loading}
             className={
               "w-full rounded-2xl border border-white/15 bg-white/5 px-4 py-3 " +
               "placeholder-white/40 text-white focus:outline-none focus:ring-2 focus:ring-fuchsia-400/40"
@@ -352,7 +358,7 @@ const ChatTester = () => {
           <div className="flex items-center gap-2">
             <button
               onClick={ask}
-              disabled={loading || overLimit || !userQ.trim()}
+              disabled={loading || blocked || !userQ.trim()}
               className={
                 "rounded-2xl bg-gradient-to-r from-fuchsia-500 to-indigo-500 px-5 py-3 text-sm font-medium " +
                 "shadow hover:from-fuchsia-400 hover:to-indigo-400 active:scale-[0.98] transition " +
@@ -361,6 +367,11 @@ const ChatTester = () => {
             >
               {loading ? "Thinking…" : "Send →"}
             </button>
+            {pending && (
+              <div className="mt-2 text-sm text-amber-200">
+                🚧 Your subscription is pending. Please complete payment before using the chat.
+              </div>
+            )}            
             <IconButton onClick={copyLast} title="Copy last answer">📋 Copy</IconButton>
             <IconButton onClick={clearChat} title="Clear chat">🧹 Reset</IconButton>
           </div>
@@ -496,7 +507,11 @@ const ChatTester = () => {
             {billingCycle === "monthly" && (
               <button
               /* block free-tier users & people already over quota */
-              disabled={tier === "free" || overLimit}
+               disabled={
+                 tier === "free"    // free users can’t buy overage
+                 || overLimit       // already over quota
+                 || subStatus !== "active"  // must be fully paid
+               }
                 onClick={async () => {
                   if (tier === "free") return;          // safety-net – shouldn’t fire anyway
                   try {
