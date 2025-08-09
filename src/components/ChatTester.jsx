@@ -47,7 +47,7 @@ const IconButton = ({ onClick, children, title, disabled }) => (
 /* ─────────────────────────────── Component ──────────────────────────────── */
 const ChatTester = () => {
   const { user } = useContext(AuthContext);
-  console.log(user.overageCredits);
+  console.log(user?.overageCredits);
   const abortRef = useRef(null);
 
   /* Backend base URL */
@@ -174,7 +174,9 @@ const ChatTester = () => {
   /* ─────────── send question ─────────── */
   const ask = async () => {
     if (!user?.uid)                 return alert("🔒 Please log in.");
-    if (overLimit) return;
+    // PATCH: don't block if credits exist
+    if (overLimit && overageCredits <= 0) return;
+
     if (!userQ.trim()) {
       alert("Please type a question.");       // gentle prod
       return;
@@ -193,9 +195,16 @@ const ChatTester = () => {
         signal:  controller.signal,
       });
 
+
+
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         pushAssistant(err.error || "❌ Something went wrong");
+        return;
+      }
+      if (!res.body || !res.body.getReader) {
+        const text = await res.text().catch(()=> "");
+        pushAssistant(text || "⚠️ No response.");
         return;
       }
       const reader = res.body?.getReader();
@@ -282,34 +291,6 @@ const ChatTester = () => {
       const msg = e?.response?.data?.error || e.message || "Unknown error";
       console.error("Checkout error:", msg);
       alert(`❌ Checkout failed: ${msg}`);
-    }
-  };
-
-  // inside ChatTester, after openCheckout…
-  const buyOverage = async () => {
-    if (!user?.uid) return alert("🔒 Please log in.");
-    try {
-      // 1️⃣ create an order on your backend
-      const { data } = await axios.post(
-        `${BASE_URL}/api/billing/create-overage-order`,
-        { userId: user.uid, blocks: 1 }
-      );
-      // 2️⃣ launch Razorpay checkout with that order
-      const options = {
-        key:         data.key,
-        amount:      data.amount,
-        currency:    data.currency,
-        order_id:    data.orderId,
-        handler: () => {
-          alert("✅ You’ve successfully purchased 1 000 extra messages!");
-          setShowPricing(false);
-        },
-      };
-      const rzp = new window.Razorpay(options);
-      rzp.open();
-    } catch (e) {
-      console.error("Overage checkout failed:", e);
-      alert("❌ Could not start overage checkout.");
     }
   };
 
@@ -412,7 +393,7 @@ const ChatTester = () => {
               className={
                 "rounded-2xl bg-gradient-to-r from-fuchsia-500 to-indigo-500 px-5 py-3 text-sm font-medium " +
                 "shadow hover:from-fuchsia-400 hover:to-indigo-400 active:scale-[0.98] transition " +
-                (loading || overLimit || !userQ.trim() ? "opacity-60" : "")
+                (loading || blocked || !userQ.trim() ? "opacity-60" : "")
               }
             >
               {loading ? "Thinking…" : "Send →"}

@@ -64,6 +64,7 @@ const Badge = ({ tone = "gray", children }) => {
     gray: "bg-gray-100 text-gray-700",
     green: "bg-green-100 text-green-700",
     purple: "bg-purple-100 text-purple-700",
+    emerald: "bg-emerald-100 text-emerald-700", // PATCH
   };
   return (
     <span className={`text-xs font-bold px-2 py-1 rounded-full ${map[tone] || map.gray}`}>
@@ -170,7 +171,7 @@ export default function AdminDashboard() {
               company?.tokensUsedMonth /* legacy */ ??
               0,
             lastReset: company?.lastReset || null,
-            subscriptionExpiresAt: company?.subscriptionExpiresAt || null,
+            ubscriptionExpiresAt: company?.currentPeriodEnd || company?.subscriptionExpiresAt || null,
           });
         });
 
