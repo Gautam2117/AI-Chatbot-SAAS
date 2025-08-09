@@ -14,7 +14,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import { TypeAnimation } from "react-type-animation";
-import dedupe from "../utils/dedupe.js";
+import { dedupe } from "../utils/dedupe.js";
 
 /* ───────────────────────────────── UI atoms ──────────────────────────────── */
 const GlassCard = ({ children, className = "" }) => (
@@ -79,6 +79,8 @@ const ChatTester = () => {
 
   const [subStatus, setSubStatus] = useState(null);
 
+  const [overageCredits, setOverageCredits] = useState(0);
+
   /* ─────────── fetch plan catalogue once ─────────── */
   useEffect(() => {
     let ignore = false;
@@ -120,6 +122,7 @@ const ChatTester = () => {
         setMonthlyLimit(caps[curTier] ?? 150);
 
         setSubStatus(d.subscriptionStatus || null);
+        setOverageCredits(d.overageCredits || 0);
 
         /* expiry warning */
         const end = d.currentPeriodEnd?.toDate?.();
@@ -151,7 +154,7 @@ const ChatTester = () => {
   const nearLimit = percentUsed >= 80 && percentUsed < 100;
   const pending   = subStatus === "created";
   const overLimit = messagesUsed >= monthlyLimit;
-  const blocked   = pending || overLimit;
+  const blocked   = pending || (overLimit && overageCredits <= 0);
 
   /* auto-open pricing when quota tight */
   useEffect(() => { if (nearLimit || overLimit) setShowPricing(true); }, [nearLimit, overLimit]);
@@ -331,7 +334,7 @@ const ChatTester = () => {
             Plan:&nbsp;<strong className="ml-1">{displayTier}</strong>
           </span>
           <span className="inline-flex items-center rounded-full px-3 py-1 text-xs border border-emerald-400/20 bg-emerald-400/10 text-emerald-200">
-            📈 {messagesUsed}/{monthlyLimit} msgs
+            📈 {messagesUsed}/{monthlyLimit} msgs{overageCredits > 0 ? `  (+${overageCredits} extra)` : ""}
           </span>
           <IconButton onClick={() => setShowPricing(true)}>💳 Upgrade</IconButton>
         </div>
