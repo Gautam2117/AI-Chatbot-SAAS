@@ -567,13 +567,16 @@
           // return null;
           typing.remove();
           res.json().then(function(payload){
-            var msg = (payload && payload.error) ||
-                      "Monthly message limit reached. Please upgrade to continue.";
+            var msg = (payload && payload.error) || "Monthly message limit reached. Please upgrade to continue.";
             var html = "<strong>Limit reached</strong><br>"+escapeHTML(msg);
             pushHistory("bot", msg);
             var b = appendRow("bot", html, new Date());
             copyable(b);
-            disable(true); // lock input until next cycle
+
+            disable(true);
+
+            // 👇 Re-check availability soon (e.g., after 3s)
+            setTimeout(function(){ checkAvailability(); }, 3000);
             currentChatController = null;
           });
           return null;
