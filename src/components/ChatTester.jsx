@@ -87,14 +87,14 @@ const ChatTester = () => {
     let ignore = false;
     (async () => {
       try {
-        // auto currency: INR if user appears from India, else USD (can be overridden)
-        const guessIN = Intl.DateTimeFormat().resolvedOptions().timeZone?.toUpperCase().includes("KOLKATA")
-                        || (navigator.language || "").toUpperCase().endsWith("-IN");
-        const prefer = guessIN ? "INR" : "USD";
-        setCurrency(prefer);
+        // Hard default = INR; only use a saved preference if the user picked it before
+        const saved = typeof localStorage !== "undefined"
+          ? localStorage.getItem("botify_currency")
+          : null;
+        if (saved === "INR" || saved === "USD") setCurrency(saved);
+        else setCurrency("INR");
 
         const { data } = await axios.get(`${BASE_URL}/api/billing/plans?fx=1`);
-
         if (!ignore) setPlans(data);
       } catch (e) {
         console.error("Failed to fetch plan catalogue:", e.message);
@@ -357,7 +357,11 @@ const ChatTester = () => {
           <div className="relative">
             <select
               value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setCurrency(val);
+                try { localStorage.setItem("botify_currency", val); } catch {}
+              }}
               title="Currency"
               className="
                 appearance-none
