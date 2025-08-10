@@ -4,23 +4,14 @@ import Layout from "../components/Layout";
 import { Link } from "react-router-dom";
 
 /* -------------------------------------------------------------------------- */
-/*  ✔  Figures and bullets here are the SINGLE SOURCE OF TRUTH for marketing  */
-/*  Keep quotas / prices in sync with Razorpay plan IDs & backend constants.  */
-/*  Backend:                                                                  */
-/*    Starter  ₹1,599/mo  • ₹15,990/yr (3,000 msgs/mo)                        */
-/*    Growth   ₹4,899/mo  • ₹48,990/yr (15,000 msgs/mo)                       */
-/*    Scale    ₹12,399/mo • ₹1,23,990/yr (50,000 msgs/mo)                     */
-/*    Starter Lite ₹499/mo (1,500 msgs/mo, branding kept)                     */
-/*    Free     1,000 msgs/mo (branding on)                                    */
+/*  ✔ SINGLE SOURCE OF TRUTH (keep in sync with backend PLAN_CATALOG)         */
 /* -------------------------------------------------------------------------- */
-
 const BILLING = {
   monthly: { suffix: "/mo", switchLabel: "Monthly" },
   yearly:  { suffix: "/yr (2 mo free)", switchLabel: "Yearly – save 17%" },
 };
 
 const BASE_PLANS = {
-  /* ---------------------------- FREE ----------------------------------- */
   free: {
     name: "Free",
     slug: "free",
@@ -34,44 +25,18 @@ const BASE_PLANS = {
       "🛠️ Community support",
     ],
     colors: {
-      borderFrom: "from-slate-300/60",
-      borderTo: "to-slate-200/60",
+      borderFrom: "from-slate-300/50",
+      borderTo: "to-slate-200/50",
       headerFrom: "from-slate-600",
       headerTo: "to-slate-800",
     },
     cta: { label: "Start Free", to: "/signup" },
   },
-
-  /* ------------------------ STARTER LITE (monthly only) ----------------- */
-  starterlite: {
-    name: "Starter Lite",
-    slug: "starterlite",
-    tierLabel: "Startup (branding kept)",
-    // Monthly only – keep object for consistent access, yearly omitted
-    price: { monthly: 499 },
-    quota: "1 500 messages / mo",
-    bullets: [
-      "💬 1 500 messages / month",
-      "🔗 1 website • Botify branding",
-      "📈 Basic analytics",
-      "🛠️ Community support",
-    ],
-    featured: false,
-    colors: {
-      borderFrom: "from-teal-400/70",
-      borderTo: "to-emerald-400/70",
-      headerFrom: "from-teal-600",
-      headerTo: "to-emerald-700",
-    },
-    cta: { label: "Choose Starter Lite", to: "/signup" },
-  },
-
-  /* ---------------------------- STARTER -------------------------------- */
   starter: {
     name: "Starter",
     slug: "starter",
     tierLabel: "Kick-off",
-    price: { monthly: 1599, yearly: 15990 }, // INR
+    price: { monthly: 1599, yearly: 15990 },
     quota: "3 000 messages / mo",
     bullets: [
       "🚀 3 000 messages / month",
@@ -82,15 +47,13 @@ const BASE_PLANS = {
     ],
     featured: false,
     colors: {
-      borderFrom: "from-indigo-400/70",
-      borderTo: "to-fuchsia-400/70",
+      borderFrom: "from-indigo-400/60",
+      borderTo: "to-fuchsia-400/60",
       headerFrom: "from-indigo-600",
       headerTo: "to-fuchsia-700",
     },
     cta: { label: "Choose Starter", to: "/signup" },
   },
-
-  /* ---------------------------- GROWTH --------------------------------- */
   growth: {
     name: "Growth",
     slug: "growth",
@@ -106,15 +69,13 @@ const BASE_PLANS = {
     ],
     featured: true,
     colors: {
-      borderFrom: "from-fuchsia-400/70",
-      borderTo: "to-indigo-400/70",
+      borderFrom: "from-fuchsia-400/60",
+      borderTo: "to-indigo-400/60",
       headerFrom: "from-fuchsia-600",
       headerTo: "to-indigo-700",
     },
     cta: { label: "Go Growth", to: "/signup" },
   },
-
-  /* ---------------------------- SCALE ---------------------------------- */
   scale: {
     name: "Scale",
     slug: "scale",
@@ -130,8 +91,8 @@ const BASE_PLANS = {
     ],
     featured: false,
     colors: {
-      borderFrom: "from-pink-400/70",
-      borderTo: "to-violet-400/70",
+      borderFrom: "from-pink-400/60",
+      borderTo: "to-violet-400/60",
       headerFrom: "from-pink-600",
       headerTo: "to-violet-700",
     },
@@ -145,39 +106,40 @@ function formatPrice(val) {
 
 const Pricing = () => {
   const [cycle, setCycle] = useState("monthly"); // monthly | yearly
-
-  // Display order (Starter Lite included)
-  const planOrder = ["free", "starterlite", "starter", "growth", "scale"];
+  const planOrder = ["free", "starter", "growth", "scale"];
 
   return (
     <Layout
       title="Pricing – Botify AI Chatbot Plans"
       description="Transparent pricing for Botify AI chatbots. Start free, then scale with Starter, Growth or Scale plans."
     >
-      <section className="relative py-14 sm:py-20">
-        {/* Ambient gradient glow */}
-        <div className="pointer-events-none absolute inset-x-0 -top-10 h-40 bg-gradient-to-r from-fuchsia-500/15 via-indigo-500/15 to-cyan-500/15 blur-3xl" />
+      <section className="relative py-14 sm:py-18">
+        {/* Subtle grid / aurora background */}
+        <div className="pointer-events-none absolute inset-0 -z-10">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(217,70,239,0.10),transparent_40%),radial-gradient(circle_at_80%_20%,rgba(79,70,229,0.12),transparent_45%)]" />
+          <div className="absolute inset-0 opacity-[0.08] [background-image:linear-gradient(rgba(255,255,255,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.08)_1px,transparent_1px)] [background-size:28px_28px]" />
+        </div>
 
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mx-auto max-w-6xl px-5 sm:px-6">
           {/* Header */}
           <div className="text-center">
-            <span className="inline-flex items-center rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold text-white/90 backdrop-blur-md">
+            <span className="inline-flex items-center rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[11px] sm:text-xs font-semibold text-white/90 backdrop-blur whitespace-nowrap">
               💎 Pricing
             </span>
-            <h1 className="mt-4 bg-gradient-to-r from-white via-white to-white/80 bg-clip-text text-4xl font-extrabold tracking-tight text-transparent">
+            <h1 className="mt-5 bg-gradient-to-r from-white via-white to-white/80 bg-clip-text text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-transparent">
               Choose the plan that grows with you
             </h1>
-            <p className="mx-auto mt-3 max-w-2xl text-white/80">
+            <p className="mx-auto mt-3 max-w-2xl text-sm sm:text-base text-white/80">
               Clear message quotas, no hidden fees. Switch or cancel anytime.
             </p>
 
             {/* Monthly / Yearly toggle */}
-            <div className="mt-6 inline-flex rounded-full bg-white/10 p-1 border border-white/10">
+            <div className="mt-7 inline-flex rounded-full bg-white/10 p-1 border border-white/10 shadow-sm">
               {Object.entries(BILLING).map(([key, cfg]) => (
                 <button
                   key={key}
                   onClick={() => setCycle(key)}
-                  className={`px-4 py-1.5 text-sm rounded-full transition font-medium ${
+                  className={`px-3.5 sm:px-4 py-1.5 text-xs sm:text-sm rounded-full transition font-medium whitespace-nowrap ${
                     cycle === key
                       ? "bg-white text-indigo-900 shadow"
                       : "text-white/80 hover:text-white"
@@ -189,100 +151,35 @@ const Pricing = () => {
             </div>
           </div>
 
-          {/* Cards */}
-          <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-4">
-            {planOrder.map((slug) => {
-              const p = BASE_PLANS[slug];
+          {/* Cards: desktop grid; mobile horizontal snap (compact) */}
+          <div className="mt-10 lg:mt-12">
+            <div className="hidden sm:grid auto-rows-fr grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-7">
+              {planOrder.map((slug) => <PlanCard key={slug} slug={slug} cycle={cycle} />)}
+            </div>
 
-              // Determine price + suffix for monthly-only plans (Starter Lite)
-              const rawPrice =
-                typeof p.price === "number"
-                  ? p.price
-                  : p.price?.[cycle] ?? p.price?.monthly;
-              const priceLabel = slug === "free" ? "₹0" : formatPrice(rawPrice);
-              const suffix =
-                typeof p.price === "number" || p.price?.[cycle] == null
-                  ? "/mo"
-                  : BILLING[cycle].suffix;
-
-              return (
-                <div
-                  key={slug}
-                  className={`relative rounded-3xl p-[1.2px] bg-gradient-to-br ${p.colors.borderFrom} ${p.colors.borderTo} transition-transform hover:-translate-y-1 hover:shadow-[0_20px_60px_rgba(0,0,0,0.35)] ${
-                    p.featured ? "scale-[1.02]" : ""
-                  }`}
-                >
-                  <div className="rounded-3xl h-full bg-white/10 backdrop-blur-xl p-6 sm:p-7 border border-white/10">
-                    {/* Badge / highlight */}
-                    <div className="flex items-center justify-between">
-                      <span className="inline-flex items-center rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold text-white/90 backdrop-blur">
-                        {p.tierLabel}
-                      </span>
-                      {p.featured && (
-                        <span className="rounded-full bg-gradient-to-r from-fuchsia-500 to-indigo-600 px-3 py-1 text-xs font-bold text-white shadow">
-                          Recommended
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Title */}
-                    <div
-                      className={`mt-5 inline-flex rounded-2xl px-3 py-2 text-white font-extrabold bg-gradient-to-r ${p.colors.headerFrom} ${p.colors.headerTo} shadow-lg`}
-                    >
-                      {p.name}
-                    </div>
-
-                    {/* Price */}
-                    <div className="mt-6 flex items-baseline gap-1">
-                      <span className="text-4xl font-extrabold text-white">{priceLabel}</span>
-                      <span className="text-sm text-white/70">{suffix}</span>
-                    </div>
-                    <p className="mt-0.5 text-xs text-white/60">{p.quota}</p>
-
-                    {/* Features */}
-                    <ul className="mt-6 space-y-3 text-white/90">
-                      {p.bullets.map((f, i) => (
-                        <li key={i} className="flex items-start gap-2">
-                          <span className="mt-1 h-2 w-2 rounded-full bg-white/70" />
-                          <span>{f}</span>
-                        </li>
-                      ))}
-                    </ul>
-
-                    {/* CTA */}
-                    <div className="mt-8">
-                      <Link
-                        to={p.cta.to}
-                        className={`inline-flex w-full items-center justify-center rounded-2xl px-4 py-3 font-semibold text-white transition ${
-                          p.featured
-                            ? "bg-gradient-to-r from-fuchsia-500 to-indigo-600 hover:from-fuchsia-400 hover:to-indigo-500 shadow-lg"
-                            : "bg-white/10 hover:bg-white/15 border border-white/10"
-                        }`}
-                      >
-                        {p.cta.label}
-                      </Link>
-                    </div>
+            {/* Mobile: horizontal scroller */}
+            <div className="sm:hidden -mx-5 px-5 overflow-x-auto snap-x snap-mandatory">
+              <div className="flex gap-4 min-w-max">
+                {planOrder.map((slug) => (
+                  <div key={slug} className="snap-start shrink-0 w-[78%]">
+                    <PlanCard slug={slug} cycle={cycle} compact />
                   </div>
-                </div>
-              );
-            })}
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* Add-on / FAQ strip */}
-          <div className="mt-10 space-y-3">
-            <div className="rounded-3xl border border-white/10 bg-white/10 p-6 text-center text-white/90 backdrop-blur-xl">
-              <p>
-                Need more messages this month? Add <strong>1,000</strong> for{" "}
-                <strong>₹329</strong> anytime.
+          <div className="mt-10 lg:mt-12 space-y-3">
+            <div className="rounded-2xl border border-white/10 bg-white/10 px-5 py-4 text-center text-white/90 backdrop-blur-xl">
+              <p className="text-sm">
+                Need more messages this month? Add <strong>1,000</strong> for <strong>₹329</strong> anytime.
               </p>
             </div>
-            <div className="rounded-3xl border border-white/10 bg-white/10 p-6 text-center text-white/90 backdrop-blur-xl">
-              <p>
+            <div className="rounded-2xl border border-white/10 bg-white/10 px-5 py-4 text-center text-white/90 backdrop-blur-xl">
+              <p className="text-sm">
                 💡 Need a custom plan or have questions?{" "}
-                <Link
-                  to="/contact"
-                  className="underline decoration-indigo-300 hover:text-white"
-                >
+                <Link to="/contact" className="underline decoration-indigo-300 hover:text-white">
                   Contact our team
                 </Link>
                 .
@@ -294,5 +191,95 @@ const Pricing = () => {
     </Layout>
   );
 };
+
+/* ------------------------------ Card ------------------------------------ */
+function PlanCard({ slug, cycle, compact = false }) {
+  const p = BASE_PLANS[slug];
+
+  const rawPrice =
+    typeof p.price === "number"
+      ? p.price
+      : p.price?.[cycle] ?? p.price?.monthly;
+
+  const priceLabel = slug === "free" ? "₹0" : formatPrice(rawPrice);
+  const suffix =
+    typeof p.price === "number" || p.price?.[cycle] == null
+      ? "/mo"
+      : BILLING[cycle].suffix;
+
+  return (
+    <div
+      className={`relative rounded-3xl p-[1.2px] bg-gradient-to-br ${p.colors.borderFrom} ${p.colors.borderTo}
+                  transition-transform hover:-translate-y-[3px] hover:shadow-[0_18px_60px_rgba(0,0,0,0.35)]`}
+    >
+      <div className="rounded-3xl h-full bg-white/10 backdrop-blur-xl border border-white/10 p-6 sm:p-6 lg:p-7 flex flex-col">
+        {/* Badge / highlight */}
+        <div className="flex items-center justify-between">
+          <span className="inline-flex items-center rounded-full border border-white/10 bg-white/10 px-2.5 py-1 text-[10px] sm:text-[11px] font-semibold text-white/90 backdrop-blur whitespace-nowrap">
+            {p.tierLabel}
+          </span>
+          {p.featured && (
+            <span className="rounded-full bg-gradient-to-r from-fuchsia-500 to-indigo-600 px-2.5 py-1 text-[10px] sm:text-[11px] font-bold text-white shadow whitespace-nowrap">
+              Recommended
+            </span>
+          )}
+        </div>
+
+        {/* Title */}
+        <div className={`mt-4 inline-flex rounded-2xl px-3 py-1.5 text-white font-extrabold bg-gradient-to-r ${p.colors.headerFrom} ${p.colors.headerTo} shadow-lg`}>
+          {p.name}
+        </div>
+
+        {/* Price */}
+        <div className="mt-4 flex items-baseline gap-2 whitespace-nowrap">
+          <span className="text-[28px] sm:text-[32px] font-extrabold text-white leading-none">
+            {priceLabel}
+          </span>
+          <span className="text-xs sm:text-sm text-white/70">{suffix}</span>
+        </div>
+        <p className="mt-1 text-[11px] sm:text-xs text-white/70">{p.quota}</p>
+
+        {/* Starter Lite chip inside Starter */}
+        {slug === "starter" && (
+          <div className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 flex items-center justify-between gap-3">
+            <div className="text-[11px] text-white/80">
+              <span className="font-semibold">Or Starter Lite</span>{" "}
+              <span className="text-white/60">₹499/mo · 1,500 msgs</span>
+            </div>
+            <Link
+              to="/signup?plan=starterlite"
+              className="shrink-0 inline-flex items-center rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-white bg-white/10 hover:bg-white/15 border border-white/10"
+            >
+              Choose
+            </Link>
+          </div>
+        )}
+
+        {/* Features */}
+        <ul className="mt-5 space-y-2.5 text-white/90 leading-6 text-[13px] flex-1">
+          {p.bullets.map((f, i) => (
+            <li key={i} className="flex items-start gap-2">
+              <span className="mt-[6px] h-1.5 w-1.5 rounded-full bg-white/70" />
+              <span>{f}</span>
+            </li>
+          ))}
+        </ul>
+
+        {/* CTA */}
+        <div className="mt-6">
+          <Link
+            to={p.cta.to}
+            className={`inline-flex w-full items-center justify-center rounded-2xl px-4 py-3 font-semibold text-white transition
+              ${p.featured
+                ? "bg-gradient-to-r from-fuchsia-500 to-indigo-600 hover:from-fuchsia-400 hover:to-indigo-500 shadow-lg"
+                : "bg-white/10 hover:bg-white/15 border border-white/10"}`}
+          >
+            {p.cta.label}
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default Pricing;

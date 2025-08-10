@@ -345,24 +345,45 @@ const ChatTester = () => {
       {/* Header */}
       <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <h2 className="text-2xl md:text-3xl font-semibold">🤖 Test your assistant</h2>
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center rounded-full px-3 py-1 text-xs border border-white/10 bg-white/5">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
+          <span className="inline-flex items-center rounded-full px-3 py-1 text-xs border border-white/10 bg-white/5 truncate max-w-full">
             Plan:&nbsp;<strong className="ml-1">{displayTier}</strong>
           </span>
-          <span className="inline-flex items-center rounded-full px-3 py-1 text-xs border border-emerald-400/20 bg-emerald-400/10 text-emerald-200">
+          <span className="inline-flex items-center rounded-full px-3 py-1 text-xs border border-emerald-400/20 bg-emerald-400/10 text-emerald-200 truncate max-w-full">
             📈 {messagesUsed}/{monthlyLimit} msgs{overageCredits > 0 ? `  (+${overageCredits} extra)` : ""}
           </span>
           <IconButton onClick={() => setShowPricing(true)}>💳 Upgrade</IconButton>
           {/* currency switcher */}
-          <select
-            value={currency}
-            onChange={(e)=>setCurrency(e.target.value)}
-            className="rounded-lg bg-white/5 border border-white/10 text-xs px-2 py-1"
-            title="Currency"
-          >
-            <option value="INR">₹ INR</option>
-            <option value="USD">$ USD</option>
-          </select>
+          <div className="relative">
+            <select
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              title="Currency"
+              className="
+                appearance-none
+                pl-3 pr-7 py-1.5
+                rounded-lg text-xs font-semibold
+                bg-white/10 text-white
+                border border-white/20
+                hover:bg-white/15
+                focus:outline-none focus:ring-2 focus:ring-fuchsia-400/40
+                transition
+              "
+            >
+              <option className="text-gray-900" value="INR">₹ INR</option>
+              <option className="text-gray-900" value="USD">$ USD</option>
+            </select>
+
+            {/* custom caret */}
+            <svg
+              aria-hidden="true"
+              className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-white/70"
+              viewBox="0 0 20 20" fill="currentColor"
+            >
+              <path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"/>
+            </svg>
+          </div>
+
         </div>
       </header>
 
