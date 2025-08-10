@@ -5,19 +5,18 @@ import { Link } from "react-router-dom";
 
 /* -------------------------------------------------------------------------- */
 /*  ✔  Figures and bullets here are the SINGLE SOURCE OF TRUTH for marketing  */
-/*  Keep quotas / prices in sync with Razorpay plan IDs & backend constants.    */
+/*  Keep quotas / prices in sync with Razorpay plan IDs & backend constants.  */
+/*  Backend:                                                                  */
+/*    Starter  ₹1,599/mo  • ₹15,990/yr (3,000 msgs/mo)                        */
+/*    Growth   ₹4,899/mo  • ₹48,990/yr (15,000 msgs/mo)                       */
+/*    Scale    ₹12,399/mo • ₹1,23,990/yr (50,000 msgs/mo)                     */
+/*    Starter Lite ₹499/mo (1,500 msgs/mo, branding kept)                     */
+/*    Free     1,000 msgs/mo (branding on)                                    */
 /* -------------------------------------------------------------------------- */
 
-// Toggle helper (monthly ↔ yearly)
 const BILLING = {
-  monthly: {
-    suffix: "/mo",
-    switchLabel: "Monthly",
-  },
-  yearly: {
-    suffix: "/yr (2 mo free)",
-    switchLabel: "Yearly – save 17%",
-  },
+  monthly: { suffix: "/mo", switchLabel: "Monthly" },
+  yearly:  { suffix: "/yr (2 mo free)", switchLabel: "Yearly – save 17%" },
 };
 
 const BASE_PLANS = {
@@ -27,9 +26,9 @@ const BASE_PLANS = {
     slug: "free",
     tierLabel: "Starter",
     price: 0,
-    quota: "150 messages / mo",
+    quota: "1 000 messages / mo",
     bullets: [
-      "💬 150 messages / month",
+      "💬 1 000 messages / month",
       "🔗 1 website • Botify branding",
       "📈 Basic analytics",
       "🛠️ Community support",
@@ -42,17 +41,42 @@ const BASE_PLANS = {
     },
     cta: { label: "Start Free", to: "/signup" },
   },
+
+  /* ------------------------ STARTER LITE (monthly only) ----------------- */
+  starterlite: {
+    name: "Starter Lite",
+    slug: "starterlite",
+    tierLabel: "Startup (branding kept)",
+    // Monthly only – keep object for consistent access, yearly omitted
+    price: { monthly: 499 },
+    quota: "1 500 messages / mo",
+    bullets: [
+      "💬 1 500 messages / month",
+      "🔗 1 website • Botify branding",
+      "📈 Basic analytics",
+      "🛠️ Community support",
+    ],
+    featured: false,
+    colors: {
+      borderFrom: "from-teal-400/70",
+      borderTo: "to-emerald-400/70",
+      headerFrom: "from-teal-600",
+      headerTo: "to-emerald-700",
+    },
+    cta: { label: "Choose Starter Lite", to: "/signup" },
+  },
+
   /* ---------------------------- STARTER -------------------------------- */
   starter: {
     name: "Starter",
     slug: "starter",
-    tierLabel: "Kick‑off",
+    tierLabel: "Kick-off",
     price: { monthly: 1599, yearly: 15990 }, // INR
-    quota: "3 000 messages / mo",
+    quota: "3 000 messages / mo",
     bullets: [
-      "🚀 3 000 messages / month",
+      "🚀 3 000 messages / month",
       "❌ Remove Botify branding",
-      "📥 Lead capture & email hand‑off",
+      "📥 Lead capture & email hand-off",
       "🔌 3 integrations",
       "📞 Priority support",
     ],
@@ -65,17 +89,18 @@ const BASE_PLANS = {
     },
     cta: { label: "Choose Starter", to: "/signup" },
   },
+
   /* ---------------------------- GROWTH --------------------------------- */
   growth: {
     name: "Growth",
     slug: "growth",
     tierLabel: "Most Popular",
     price: { monthly: 4899, yearly: 48990 },
-    quota: "15 000 messages / mo",
+    quota: "15 000 messages / mo",
     bullets: [
-      "🔥 15 000 messages / month",
+      "🔥 15 000 messages / month",
       "⚡ Unlimited integrations & workflows",
-      "🖼️ White‑label launcher & CNAME",
+      "🖼️ White-label launcher & CNAME",
       "📊 Advanced analytics",
       "💎 Premium support",
     ],
@@ -88,16 +113,17 @@ const BASE_PLANS = {
     },
     cta: { label: "Go Growth", to: "/signup" },
   },
+
   /* ---------------------------- SCALE ---------------------------------- */
   scale: {
     name: "Scale",
     slug: "scale",
     tierLabel: "Enterprise",
     price: { monthly: 12399, yearly: 123990 },
-    quota: "50 000 messages / mo",
+    quota: "50 000 messages / mo",
     bullets: [
-      "🚀 50 000 messages / month",
-      "🌐 Multisite & multi‑workspace",
+      "🚀 50 000 messages / month",
+      "🌐 Multisite & multi-workspace",
       "📚 Custom ML embeddings",
       "🔒 Dedicated VPC & SSO",
       "🤝 1:1 success manager",
@@ -120,7 +146,8 @@ function formatPrice(val) {
 const Pricing = () => {
   const [cycle, setCycle] = useState("monthly"); // monthly | yearly
 
-  const planOrder = ["free", "starter", "growth", "scale"];
+  // Display order (Starter Lite included)
+  const planOrder = ["free", "starterlite", "starter", "growth", "scale"];
 
   return (
     <Layout
@@ -166,10 +193,18 @@ const Pricing = () => {
           <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-4">
             {planOrder.map((slug) => {
               const p = BASE_PLANS[slug];
-              const priceLabel =
-                slug === "free"
-                  ? "₹0"
-                  : formatPrice(p.price[cycle]);
+
+              // Determine price + suffix for monthly-only plans (Starter Lite)
+              const rawPrice =
+                typeof p.price === "number"
+                  ? p.price
+                  : p.price?.[cycle] ?? p.price?.monthly;
+              const priceLabel = slug === "free" ? "₹0" : formatPrice(rawPrice);
+              const suffix =
+                typeof p.price === "number" || p.price?.[cycle] == null
+                  ? "/mo"
+                  : BILLING[cycle].suffix;
+
               return (
                 <div
                   key={slug}
@@ -200,7 +235,7 @@ const Pricing = () => {
                     {/* Price */}
                     <div className="mt-6 flex items-baseline gap-1">
                       <span className="text-4xl font-extrabold text-white">{priceLabel}</span>
-                      <span className="text-sm text-white/70">{BILLING[cycle].suffix}</span>
+                      <span className="text-sm text-white/70">{suffix}</span>
                     </div>
                     <p className="mt-0.5 text-xs text-white/60">{p.quota}</p>
 
@@ -233,18 +268,26 @@ const Pricing = () => {
             })}
           </div>
 
-          {/* FAQ / Contact strip */}
-          <div className="mt-10 rounded-3xl border border-white/10 bg-white/10 p-6 text-center text-white/90 backdrop-blur-xl">
-            <p>
-              💡 Need a custom plan or have questions?{' '}
-              <Link
-                to="/contact"
-                className="underline decoration-indigo-300 hover:text-white"
-              >
-                Contact our team
-              </Link>
-              .
-            </p>
+          {/* Add-on / FAQ strip */}
+          <div className="mt-10 space-y-3">
+            <div className="rounded-3xl border border-white/10 bg-white/10 p-6 text-center text-white/90 backdrop-blur-xl">
+              <p>
+                Need more messages this month? Add <strong>1,000</strong> for{" "}
+                <strong>₹329</strong> anytime.
+              </p>
+            </div>
+            <div className="rounded-3xl border border-white/10 bg-white/10 p-6 text-center text-white/90 backdrop-blur-xl">
+              <p>
+                💡 Need a custom plan or have questions?{" "}
+                <Link
+                  to="/contact"
+                  className="underline decoration-indigo-300 hover:text-white"
+                >
+                  Contact our team
+                </Link>
+                .
+              </p>
+            </div>
           </div>
         </div>
       </section>

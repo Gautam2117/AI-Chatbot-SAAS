@@ -9,13 +9,11 @@ import {
   onSnapshot,
 } from "firebase/firestore";
 import axios from "axios";
-import { useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import { TypeAnimation } from "react-type-animation";
 import { dedupe } from "../utils/dedupe.js";
-
 /* ───────────────────────────────── UI atoms ──────────────────────────────── */
 const GlassCard = ({ children, className = "" }) => (
   <div
@@ -75,7 +73,10 @@ const ChatTester = () => {
   /* pricing modal */
   const [showPricing,   setShowPricing]   = useState(false);
   const [billingCycle,  setBillingCycle]  = useState("monthly"); // or "yearly"
+  const [coupon,        setCoupon]        = useState("");
   const [plans,         setPlans]         = useState(null);      // fetched catalogue
+  const [currency,      setCurrency]      = useState("INR");     // "INR" | "USD"
+  const [showLite,      setShowLite]      = useState(false);     // reveal Starter Lite
 
   const [subStatus, setSubStatus] = useState(null);
 
@@ -86,7 +87,14 @@ const ChatTester = () => {
     let ignore = false;
     (async () => {
       try {
-        const { data } = await axios.get(`${BASE_URL}/api/billing/plans`);
+        // auto currency: INR if user appears from India, else USD (can be overridden)
+        const guessIN = Intl.DateTimeFormat().resolvedOptions().timeZone?.toUpperCase().includes("KOLKATA")
+                        || (navigator.language || "").toUpperCase().endsWith("-IN");
+        const prefer = guessIN ? "INR" : "USD";
+        setCurrency(prefer);
+
+        const { data } = await axios.get(`${BASE_URL}/api/billing/plans?fx=1`);
+
         if (!ignore) setPlans(data);
       } catch (e) {
         console.error("Failed to fetch plan catalogue:", e.message);
@@ -136,6 +144,20 @@ const ChatTester = () => {
         } else setExpiryWarn("");
       });
 
+      const pullUsage = async () => {
+        try {
+          const { data } = await axios.get(`${BASE_URL}/api/usage-status`, {
+            headers: { "x-user-id": user.uid },
+          });
+          setMessagesUsed(Number.isFinite(data.usage) ? data.usage : 0);
+          setMonthlyLimit(Number.isFinite(data.limit) ? data.limit : 1_000_000_000); // treat Infinity safely
+          setSubStatus(data.subscriptionStatus || null);
+        } catch {}
+      };
+      pullUsage();
+      const t = setInterval(pullUsage, 30_000);
+      return () => clearInterval(t);
+
       /* FAQ listener */
       unsubFaqs = onSnapshot(
         collection(db, "faqs", cId, "list"),
@@ -155,6 +177,18 @@ const ChatTester = () => {
   const pending   = subStatus === "created";
   const overLimit = messagesUsed >= monthlyLimit;
   const blocked   = pending || (overLimit && overageCredits <= 0);
+  const atLimit   = percentUsed >= 100;
+
+  const fmtMoney = (n) =>
+    new Intl.NumberFormat(undefined, { style: "currency", currency })
+      .format(n).replace(/\u00A0/g, " ");
+
+  const unitPrice = (price, msgs, cycle) => {
+    // price is in the currency provided by backend; messages per month
+    const months = cycle === "yearly" ? 12 : 1;
+    const ppm = price / (msgs * months);
+    return `${currency === "INR" ? "≈ " : "≈ "}${currency === "INR" ? "₹" : "$"}${ppm.toFixed(2)}/msg`;
+  };
 
   /* auto-open pricing when quota tight */
   useEffect(() => { if (nearLimit || overLimit) setShowPricing(true); }, [nearLimit, overLimit]);
@@ -250,11 +284,12 @@ const ChatTester = () => {
 
     try {
       const { data } = await axios.post(`${BASE_URL}/api/billing/subscribe`, {
-        planKey,
-        userId:   user.uid,
-        companyId,
-        customer: { name: user.displayName, email: user.email },
-      });
+         planKey,
+         userId:   user.uid,
+         companyId,
+         customer: { name: user.displayName, email: user.email },
+         coupon   : coupon?.trim() || undefined, // "FOUNDER50" | "AGENCY20"
+       });
 
       const launch = () => {
         const rzp = new window.Razorpay({
@@ -318,8 +353,30 @@ const ChatTester = () => {
             📈 {messagesUsed}/{monthlyLimit} msgs{overageCredits > 0 ? `  (+${overageCredits} extra)` : ""}
           </span>
           <IconButton onClick={() => setShowPricing(true)}>💳 Upgrade</IconButton>
+          {/* currency switcher */}
+          <select
+            value={currency}
+            onChange={(e)=>setCurrency(e.target.value)}
+            className="rounded-lg bg-white/5 border border-white/10 text-xs px-2 py-1"
+            title="Currency"
+          >
+            <option value="INR">₹ INR</option>
+            <option value="USD">$ USD</option>
+          </select>
         </div>
       </header>
+
+      {/* Nudges at 80% / 100% */}
+      {nearLimit && (
+        <div className="mt-3 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-sm text-amber-100">
+          You’ve used {Math.floor(percentUsed)}% of your monthly messages. Consider upgrading to avoid interruptions.
+        </div>
+      )}
+      {atLimit && (
+        <div className="mt-3 rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-2 text-sm text-rose-100">
+          You hit the monthly limit. Buy 1,000 extra messages or upgrade a plan to continue.
+        </div>
+      )}
 
       {expiryWarn && (
         <div className="mt-3 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-sm text-amber-100">
@@ -443,6 +500,12 @@ const ChatTester = () => {
             <p className="mt-1 text-sm text-white/60">
               More messages, faster responses, premium support.
             </p>
+            {/* free vs trial descriptor (comes from backend flag; see usage-status limit) */}
+            <div className="mt-2 text-xs text-white/50">
+              {plans.freeMode === "trial"
+                ? "You’re on a 14-day free trial (branding on)."
+                : "You’re on Free — 1,000 msgs/mo (branding on)."}
+            </div>
 
             {/* cycle toggle */}
             <div className="mt-4 flex gap-4">
@@ -457,26 +520,40 @@ const ChatTester = () => {
                       : "text-white/70 hover:bg-white/5 border border-transparent")
                   }
                 >
-                  {c === "monthly" ? "Monthly" : "Yearly (-2 mo)"}
+                  {c === "monthly" ? "Monthly" : "Yearly"}
                 </button>
               ))}
+              {billingCycle === "yearly" && (
+                <span className="ml-2 inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-400/30 px-2 py-0.5 text-[10px] text-emerald-200">
+                  Save ~17%
+                </span>
+              )}
+            </div>
+
+            {/* coupon */}
+            <div className="mt-3">
+              <input
+                value={coupon}
+                onChange={(e)=>setCoupon(e.target.value)}
+                placeholder="Have a code? (FOUNDER50 / AGENCY20)"
+                className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm"
+              />
             </div>
 
             {/* plan cards */}
             <div className="mt-5 grid gap-3">
               {[
                 { keyBase: "starter", title: "Starter", colour: "white"   },
-                { keyBase: "growth",  title: "Growth",  colour: "fuchsia" },
+                { keyBase: "growth",  title: "Growth · Most popular",  colour: "fuchsia" },
                 { keyBase: "scale",   title: "Scale",   colour: "indigo"  },
               ].map(({ keyBase, title, colour }) => {
                 const planKey = `${keyBase}_${billingCycle}`; // starter_monthly, growth_yearly …
-                const meta =
-                  keyBase === "starter"
-                    ? plans.starter[billingCycle]
-                    : keyBase === "growth"
-                    ? plans.growth[billingCycle]
-                    : plans.scale[billingCycle];
-
+                const all = {
+                  starter: plans.starter,
+                  growth : plans.growth,
+                  scale  : plans.scale
+                }[keyBase];
+                const meta = all?.[billingCycle];
                 if (!meta) return null;
 
                 const cardCls =
@@ -506,12 +583,27 @@ const ChatTester = () => {
                         <div className="text-xs text-white/60">
                           {meta.messages.toLocaleString()} msgs / mo
                         </div>
+                        <div className="text-[11px] text-white/40 mt-0.5">
+                          {unitPrice(
+                            (currency === "INR" ? meta.priceINR : meta.priceUSD),
+                            meta.messages,
+                            billingCycle
+                          )}
+                        </div>
+                        {keyBase === "growth" && (
+                          <div className="text-[11px] text-white/55 mt-1">
+                            Teams save 8–12 hrs/week on repetitive tickets.
+                          </div>
+                        )}
                       </div>
 
                       {/* price + action */}
                       <div className="text-right">
                         <div className="font-semibold">
-                          ₹{meta.price.toLocaleString()} / {billingCycle === 'monthly' ? 'mo' : 'yr'}
+                          {currency === "INR"
+                            ? `${fmtMoney(meta.priceINR)}`
+                            : `${fmtMoney(meta.priceUSD)}`}
+                          <span className="text-xs text-white/60"> / {billingCycle === 'monthly' ? 'mo' : 'yr'}</span>
                         </div>
 
                         {/* “Choose” button or disabled “Current plan” label */}
@@ -532,7 +624,47 @@ const ChatTester = () => {
                   </div>
                 );
               })}
+
+              {/* Hidden Starter Lite */}
+              {billingCycle === "monthly" && showLite && plans?.starterlite?.monthly && (
+                <div className="rounded-xl border border-teal-400/30 bg-teal-500/10 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-medium">Starter Lite (branding kept)</div>
+                      <div className="text-xs text-white/60">
+                        {plans.starterlite.monthly.messages.toLocaleString()} msgs / mo
+                      </div>
+                      <div className="text-[11px] text-white/40 mt-0.5">
+                        {unitPrice(
+                          currency === "INR" ? plans.starterlite.monthly.priceINR : plans.starterlite.monthly.priceUSD,
+                          plans.starterlite.monthly.messages,
+                          "monthly"
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-semibold">
+                        {currency === "INR" ? fmtMoney(plans.starterlite.monthly.priceINR) : fmtMoney(plans.starterlite.monthly.priceUSD)}
+                        <span className="text-xs text-white/60"> / mo</span>
+                      </div>
+                      <button
+                        onClick={() => openCheckout("starterlite_monthly")}
+                        className="mt-2 rounded-xl px-3 py-1.5 text-xs bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400"
+                      >
+                        Choose
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
+
+            {/* Lite reveal link */}
+            <div className="mt-3 text-center text-xs">
+              <button onClick={()=>setShowLite(s=>!s)} className="underline text-white/70 hover:text-white">
+                {showLite ? "Hide startup plan" : "Startup plan?"}
+              </button>
+            </div>  
 
             {/* add-on */}
             {billingCycle === "monthly" && (
@@ -582,7 +714,9 @@ const ChatTester = () => {
               >
                 <div className="flex items-center justify-between">
                   <span>Add 1 000 extra messages</span>
-                  <span className="font-semibold">₹{plans.overage.per_1k}</span>
+                  <span className="font-semibold">
+                    {currency === "INR" ? fmtMoney(plans.overage.per_1kINR) : fmtMoney(plans.overage.per_1kUSD)}
+                  </span>
                 </div>
               </button>
             )}
@@ -590,6 +724,11 @@ const ChatTester = () => {
             <p className="mt-4 text-center text-xs text-white/50">
               Cancel anytime. Billing recurs {billingCycle}.
             </p>
+            {/* trust + guarantees */}
+            <div className="mt-4 text-center text-[11px] text-white/60 space-y-1">
+              <div>30-day money-back on Growth & Scale. Cancel anytime.</div>
+              <div>2-minute install • GDPR-ready • Data encrypted • Made in India 🇮🇳</div>
+            </div>
           </div>
         </div>
       )}

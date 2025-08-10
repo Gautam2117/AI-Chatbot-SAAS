@@ -96,7 +96,13 @@ const Footer = () => {
             </div>
           </div>
 
-          <div className="mt-10 border-t border-white/10 pt-6 text-center text-xs text-white/60">
+          {/* Trust row */}
+          <div className="mt-10 border-t border-white/10 pt-4 text-center text-[0.8rem] text-white/70 animate-fadeIn">
+            🇮🇳 Made in India • 🛡 GDPR-ready • 🔒 Data encrypted at rest/in transit
+          </div>
+
+          {/* Copyright */}
+          <div className="mt-4 border-t border-white/10 pt-4 text-center text-xs text-white/60">
             &copy; {new Date().getFullYear()} <span className="font-semibold text-white/80">Botify</span>. All rights reserved.
           </div>
         </div>
