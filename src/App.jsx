@@ -803,10 +803,32 @@ export function MainContent() {
               </React.Fragment>
             ))}
           </nav>
+
+          {/* Install speed pill */}
+          <div className="mt-4 flex justify-center">
+            <span className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs
+                            border border-emerald-400/30 bg-emerald-500/10 text-emerald-200">
+              ⚡ Installs in 2 minutes
+            </span>
+          </div>
+
+          {/* Trust row */}
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-[11px]">
+            <span className="inline-flex items-center rounded-full px-2.5 py-1
+                            bg-white/5 border border-white/10 text-white/80">🇮🇳 Made in India</span>
+            <span className="text-white/20">•</span>
+            <span className="inline-flex items-center rounded-full px-2.5 py-1
+                            bg-white/5 border border-white/10 text-white/80">GDPR-ready</span>
+            <span className="text-white/20">•</span>
+            <span className="inline-flex items-center rounded-full px-2.5 py-1
+                            bg-white/5 border border-white/10 text-white/80">🔒 Data encrypted at rest/in transit</span>
+          </div>
+
           <p className="mt-3 text-center text-xs">
             &copy; {new Date().getFullYear()} <span className="font-medium text-white/80">Botify</span>. All rights reserved.
           </p>
         </footer>
+
       </div>
     </main>
   );
